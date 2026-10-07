@@ -51,4 +51,4 @@ Both ESPs land in `build/plugins/`.
 ## License
 
 Spell Hotbar 2 is released by pWn3d1337 under the MIT License; its notice is in
-`skse_plugin/LICENSE.txt`. This fork is distributed under the same license.
+`skse_plugin/LICENSE.txt`. This fork is distributed under the same license; see `LICENSE`.

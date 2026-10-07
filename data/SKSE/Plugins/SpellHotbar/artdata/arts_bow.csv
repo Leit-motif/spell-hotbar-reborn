@@ -1,0 +1,5 @@
+ArtID	DisplayName	Icon	Selector	ArtClass	StaminaCost	Cooldown	GlobalCooldown
+901	Arcane Shot	GREATER_POWER	901	Bow	25	8s	1.0
+902	Blunt Shot	GREATER_POWER	902	Bow	25	8s	1.0
+903	Rapid Shot	GREATER_POWER	903	Bow	25	8s	1.0
+904	Scatter Shot	GREATER_POWER	904	Bow	25	8s	1.0

@@ -1,0 +1,11 @@
+{
+  "SpellHotbar.pex": {
+    "psc": "papyrus/Scripts/Source/SpellHotbar.psc",
+    "psc_sha256": "30c42b7de18eaa1281b039cbf4deaa1868d1bce48ea1ae6a1054687ab25583e6",
+    "psc_mtime": 1788980692.178928,
+    "pex_sha256": "2d0e806abff700df403fad624d9518f488a983a092326d1ff19a6e8f0676a73b",
+    "pex_compiled_at": 1789092001,
+    "pex_compiled_utc": "2026-09-11T02:00:01+00:00",
+    "imported_utc": "2026-09-11T02:00:06+00:00"
+  }
+}

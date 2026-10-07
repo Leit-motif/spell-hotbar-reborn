@@ -1,0 +1,37 @@
+#pragma once
+#include "hotbar.h"
+
+namespace SpellHotbar::Bars {
+
+
+	class OblivionBar {
+
+    public:
+        static inline constexpr std::string_view oblivion_bar_name = "oblivion_bar";
+        
+        OblivionBar();
+        ~OblivionBar() = default;
+
+        void set_spell(SlottedSkill& spell);
+        void set_potion(SlottedSkill& potion);
+
+        void serialize(SKSE::SerializationInterface* serializer, uint32_t key) const;
+        void deserialize(SKSE::SerializationInterface* serializer, uint32_t type, uint32_t version, uint32_t length);
+
+        /** The Oblivion-mode bar as a display list for the FLICK HUD window; see Hotbar::build_hud_layer. */
+        void build_hud_layer(Flick::HudLayer& layer, float screensize_x, float screensize_y, int highlight_slot,
+                             float highlight_factor, key_modifier mod, bool highlight_isred, float alpha,
+                             float shout_cd, float shout_cd_dur);
+
+        //called before loading a save
+        void clear();
+
+        SlottedSkill get_slotted_spell();
+        SlottedSkill get_slotted_potion();
+
+    private:
+        SlottedSkill m_spell_slot;
+        SlottedSkill m_potion_slot;
+        SlottedSkill m_power_slot; //dummy used for rendering
+	};
+}

@@ -1,0 +1,468 @@
+#pragma once
+#include "../bar/hotbar.h"
+#include "../logger/logger.h"
+#include "spell_cast_data.h"
+#include "user_custom_spelldata.h"
+#include "../bar/oblivion_bar.h"
+#include "equipped_type.h"
+#include "art_definition.h"
+#include "action_definition.h"
+#include <optional>
+#include <vector>
+
+namespace SpellHotbar::GameData {
+
+    class User_custom_spelldata; //forward declaration
+
+    enum class DefaultIconType : uint32_t {
+        UNKNOWN = 0U,
+        BAR_EMPTY,
+        BAR_OVERLAY,
+        BAR_HIGHLIGHT,
+        UNBIND_SLOT,
+        LESSER_POWER,
+        GREATER_POWER,
+        DESTRUCTION_FIRE_NOVICE,
+        DESTRUCTION_FIRE_APPRENTICE,
+        DESTRUCTION_FIRE_ADEPT,
+        DESTRUCTION_FIRE_EXPERT,
+        DESTRUCTION_FIRE_MASTER,
+        DESTRUCTION_FROST_NOVICE,
+        DESTRUCTION_FROST_APPRENTICE,
+        DESTRUCTION_FROST_ADEPT,
+        DESTRUCTION_FROST_EXPERT,
+        DESTRUCTION_FROST_MASTER,
+        DESTRUCTION_SHOCK_NOVICE,
+        DESTRUCTION_SHOCK_APPRENTICE,
+        DESTRUCTION_SHOCK_ADEPT,
+        DESTRUCTION_SHOCK_EXPERT,
+        DESTRUCTION_SHOCK_MASTER,
+        DESTRUCTION_GENERIC_NOVICE,
+        DESTRUCTION_GENERIC_APPRENTICE,
+        DESTRUCTION_GENERIC_ADEPT,
+        DESTRUCTION_GENERIC_EXPERT,
+        DESTRUCTION_GENERIC_MASTER,
+        ALTERATION_NOVICE,
+        ALTERATION_APPRENTICE,
+        ALTERATION_ADEPT,
+        ALTERATION_EXPERT,
+        ALTERATION_MASTER,
+        RESTORATION_FRIENDLY_NOVICE,
+        RESTORATION_FRIENDLY_APPRENTICE,
+        RESTORATION_FRIENDLY_ADEPT,
+        RESTORATION_FRIENDLY_EXPERT,
+        RESTORATION_FRIENDLY_MASTER,
+        RESTORATION_HOSTILE_NOVICE,
+        RESTORATION_HOSTILE_APPRENTICE,
+        RESTORATION_HOSTILE_ADEPT,
+        RESTORATION_HOSTILE_EXPERT,
+        RESTORATION_HOSTILE_MASTER,
+        ILLUSION_FRIENDLY_NOVICE,
+        ILLUSION_FRIENDLY_APPRENTICE,
+        ILLUSION_FRIENDLY_ADEPT,
+        ILLUSION_FRIENDLY_EXPERT,
+        ILLUSION_FRIENDLY_MASTER,
+        ILLUSION_HOSTILE_NOVICE,
+        ILLUSION_HOSTILE_APPRENTICE,
+        ILLUSION_HOSTILE_ADEPT,
+        ILLUSION_HOSTILE_EXPERT,
+        ILLUSION_HOSTILE_MASTER,
+        CONJURATION_BOUND_WEAPON_NOVICE,
+        CONJURATION_BOUND_WEAPON_APPRENTICE,
+        CONJURATION_BOUND_WEAPON_ADEPT,
+        CONJURATION_BOUND_WEAPON_EXPERT,
+        CONJURATION_BOUND_WEAPON_MASTER,
+        CONJURATION_SUMMON_NOVICE,
+        CONJURATION_SUMMON_APPRENTICE,
+        CONJURATION_SUMMON_ADEPT,
+        CONJURATION_SUMMON_EXPERT,
+        CONJURATION_SUMMON_MASTER,
+        SHOUT_GENERIC,
+        SINGLE_CAST,
+        DUAL_CAST,
+        SCROLL_OVERLAY,
+        NO_OVERLAY,
+        GENERIC_POTION,
+        GENERIC_POTION_SMALL,
+        GENERIC_POTION_LARGE,
+        GENERIC_POISON,
+        GENERIC_POISON_SMALL,
+        GENERIC_POISON_LARGE,
+        GENERIC_FOOD,
+        GENERIC_FOOD_SOUP,
+        GENERIC_FOOD_DRINK,
+        TAB_ALL,
+        TAB_SPELLS,
+        TAB_SCROLLS,
+        TAB_POTIONS,
+        TAB_POISONS,
+        TAB_FOOD
+    };
+
+    struct Gametime_cooldown_value {
+        float readytime; //Gametime when ready again
+        float duration; //total cooldown duration
+
+        Gametime_cooldown_value(float readytime, float duration);
+        float get_progress(float current_game_time);
+        bool is_expired(float current_game_time);
+    };
+
+    enum class custom_transform_spell_type: uint8_t {
+        regular = 0U, //regular inventory
+        fav_menu, //use fave menu to bind, but still cast all trough bar
+        fav_menu_switch // use fav menu, and switch spells instead of casting
+    };
+
+    struct Transformation_data {
+        uint32_t bar_id;
+        custom_transform_spell_type casting_type;
+    };
+
+    struct Slotted_Skill_Data {
+        RE::FormID form_id;
+        slot_type slot;
+        consumed_type consumed;
+        hand_mode hand;
+        bool inherited;
+    };
+
+    struct Key_Data {
+        std::string short_text;
+        std::string long_text;
+        int texture_index;
+
+        Key_Data(const std::string & short_text, const std::string& long_text, int texture_index);
+    };
+
+    extern RE::TESGlobal* global_animation_type;
+    extern RE::TESGlobal* global_casting_source;
+    extern RE::TESGlobal* global_vampire_lord_equip_mode;
+    extern RE::TESGlobal* global_casting_conc_spell;
+    extern RE::TESGlobal* global_spellhotbar_use_dual_casting;
+
+    extern RE::SpellItem* spellhotbar_castfx_spell;
+    extern RE::SpellItem* spellhotbar_unbind_slot;
+    extern RE::SpellItem* spellhotbar_toggle_dualcast;
+    extern RE::EffectSetting* spellhotbar_spellproc_cd;
+    extern RE::SpellItem* spellhotbar_apply_spellproc_cd;
+    extern RE::SpellItem* spellhotbar_battlemage_open_perks_power;
+
+    extern RE::TESGlobal* global_spellhotbar_perks_override;
+    extern RE::TESGlobal* global_spellhotbar_perks_timed_block_window;
+    extern RE::TESGlobal* global_spellhotbar_perks_block_trigger_chance;
+    extern RE::TESGlobal* global_spellhotbar_perks_power_attack_trigger_chance;
+    extern RE::TESGlobal* global_spellhotbar_perks_sneak_attack_trigger_chance;
+    extern RE::TESGlobal* global_spellhotbar_perks_crit_trigger_chance;
+    extern RE::TESGlobal* global_spellhotbar_perks_proc_cooldown;
+    extern RE::TESGlobal* global_spellhotbar_perks_require_halfcostperk;
+
+    extern RE::BGSPerk* spellhotbar_perk_cast_on_power_attack;
+    extern RE::BGSPerk* spellhotbar_perk_cast_on_sneak_attack;
+    extern RE::BGSPerk* spellhotbar_perk_cast_on_crit;
+    extern RE::BGSPerk* spellhotbar_perk_cast_on_block;
+    extern RE::BGSPerk* spellhotbar_perk_cast_on_concentration;
+    extern RE::BGSPerk* spellhotbar_perk_expert;
+    extern RE::BGSPerk* spellhotbar_perk_master;
+    // Ability hyperarmor: the hidden perk whose Mod Incoming Damage value the DLL writes.
+    extern RE::BGSPerk* spellhotbar_ability_hyperarmor_perk;
+
+    extern RE::BGSEquipSlot* equip_slot_right_hand;
+    extern RE::BGSEquipSlot* equip_slot_left_hand;
+    extern RE::BGSEquipSlot* equip_slot_either_hand;
+    extern RE::BGSEquipSlot* equip_slot_both_hand;
+    extern RE::BGSEquipSlot* equip_slot_voice;
+
+    extern RE::BGSPerk* perk_alteration_dual_casting;
+    extern RE::BGSPerk* perk_conjuration_dual_casting;
+    extern RE::BGSPerk* perk_destruction_dual_casting;
+    extern RE::BGSPerk* perk_illusion_dual_casting;
+    extern RE::BGSPerk* perk_restoration_dual_casting;
+
+    extern RE::BGSSoundDescriptorForm* sound_ITMPotionUse;
+    extern RE::BGSSoundDescriptorForm* sound_NPCHumanEatSoup;
+
+    extern std::unordered_map<RE::FormID, Spell_cast_data> spell_cast_info;
+    extern std::vector<std::tuple<RE::BGSArtObject*, RE::BGSArtObject*, const std::string>> spell_casteffect_art;
+
+    extern std::unordered_map<int, Key_Data> key_names;
+
+    extern std::unordered_map<int, std::string> animation_names;
+
+    extern std::unordered_map<RE::FormID, GameData::User_custom_spelldata> user_spell_cast_info;
+    extern std::unordered_map<RE::FormID, GameData::User_custom_entry> user_custom_entry_info;
+
+    extern std::unordered_map<RE::ActorValue, ImU32> potion_color_mapping;
+
+    extern float potion_gcd;
+    extern float spell_gcd;
+    extern float block_timer;
+
+    extern Bars::OblivionBar oblivion_bar;
+    /*
+    * Have ImGui Icons be successfully loaded?
+    */
+    extern bool key_icons_available;
+
+    extern bool individual_shout_cooldowns;
+
+    // Ability hyperarmor, the FLICK Gameplay settings. Reduction is a percent, 0-100.
+    extern bool ability_stagger_immunity;
+    extern float ability_damage_reduction;
+
+    /** Clear all co-save-owned runtime state before a new game or save load. */
+    void reset_persistent_state();
+
+    void load_from_SKSE_save(SKSE::SerializationInterface* a_intfc);
+    void save_to_SKSE_save(SKSE::SerializationInterface* a_intfc);
+
+    void load_user_spell_data_from_SKSE_save(SKSE::SerializationInterface* a_intfc, uint32_t version);
+    void save_user_spell_data_to_SKSE_save(SKSE::SerializationInterface* a_intfc);
+
+    void load_user_entry_info_from_SKSE_save(SKSE::SerializationInterface* a_intfc, uint32_t version);
+    void save_user_entry_info_to_SKSE_save(SKSE::SerializationInterface* a_intfc);
+
+    //Called when game data is available
+    void onDataLoad();
+
+    //read the currently bound key for a spell from global var
+    int get_spell_keybind(int slot_index);
+
+    std::string get_keybind_text(int slot_index, key_modifier mod);
+    std::tuple<int,int> get_keybind_icon_index(int slot_index, key_modifier mod);
+
+    inline RE::TESForm* get_form_from_file(const uint32_t formID, const std::string_view& pluginFile)
+    {
+        static const auto data_handler = RE::TESDataHandler::GetSingleton();
+        if (data_handler != nullptr) {
+            return data_handler->LookupForm(formID, pluginFile);
+        } else {
+            logger::error("data_handler is null");
+            return nullptr;
+        }
+    }
+
+    void load_keynames_file();
+
+    void set_spell_cast_data(RE::FormID spell, Spell_cast_data&& data);
+    
+    void set_spell_cooldown_effect(RE::FormID spell, RE::FormID cd_effect);
+
+    void reload_data();
+
+    void set_art(ArtDefinition art);
+    const ArtDefinition* get_art(uint32_t art_id);
+    ArtDefinition* get_art_mut(uint32_t art_id);
+    void set_art_icon(uint32_t art_id, std::string icon, std::uint32_t icon_form = 0);
+    void reset_art_icon(uint32_t art_id);
+    bool persist_user_art_icons();
+    bool persist_art_player_overlay(const ArtDefinition& art);
+    bool load_user_art_icons();
+    bool get_art_catalogue_icon(uint32_t art_id, std::string& out_icon, std::uint32_t& out_icon_form);
+    const ArtDefinition* get_art_catalogue(uint32_t art_id);
+    std::vector<uint32_t> list_art_ids();
+
+    /**
+     * Actions are SH2-owned input payloads rather than TES forms or Ability clips. The catalogue
+     * is seeded independently of load-order forms and player overlays are kept in a sidecar so a
+     * DLL reload does not erase the editor's name, icon, target, or optional costs. That sidecar
+     * (action_overlays.json, under the icon-edits user dir) is per install, not per character,
+     * matching art_icons.json; slot assignments stay per character in the co-save.
+     */
+    void seed_default_actions();
+    const ActionDefinition* get_action(uint32_t action_id);
+    ActionDefinition* get_action_mut(uint32_t action_id);
+    const ActionDefinition* get_action_catalogue(uint32_t action_id);
+    std::vector<uint32_t> list_action_ids();
+    bool persist_action_player_overlay(const ActionDefinition& action);
+    bool load_user_action_overlays();
+    /**
+     * Which Ability art is playing, for OAR's benefit (one selector, not a path per art).
+     *
+     * It is not a `TESGlobal` in `SpellHotbar.esp`, though an OAR `CompareValues` condition could
+     * read one. Such a form is not in stock Spell Hotbar 2, so shipping it would mean either
+     * redistributing upstream's ESP or adding one of our own. Neither is needed: OAR's built-in
+     * `CompareValues` reads a behavior-graph variable directly, and this mod already ships a
+     * Nemesis patch that can declare one. `set_art_selector` writes `SH2_ArtSelector` into the
+     * graph as well as here.
+     *
+     * The in-process copy is what the clip-translation path reads, off the animation thread, so
+     * the accessors stay atomic; the graph write is the half OAR sees.
+     */
+    void set_art_selector(int value);
+    void reset_art_selector();
+    int get_art_selector();
+    void add_art_cooldown(uint32_t art_id, float days);
+    bool is_art_on_cd(uint32_t art_id);
+    std::tuple<float, float> get_art_gametime_cooldown(float curr_game_time, uint32_t art_id);
+
+    void add_action_cooldown(uint32_t action_id, float days);
+    void clear_action_cooldown(uint32_t action_id);
+    bool is_action_on_cd(uint32_t action_id);
+    std::tuple<float, float> get_action_gametime_cooldown(float curr_game_time, uint32_t action_id);
+
+    void add_gametime_cooldown(RE::FormID skill, float hours, bool update_existing);
+
+    void add_gametime_cooldown_with_timescale(RE::FormID skill, float days, bool update_existing);
+
+    void purge_expired_gametime_cooldowns();
+    void purge_shout_gametime_cooldowns();
+
+    bool is_skill_on_cd(RE::FormID skill);
+
+    std::tuple<float, float> get_gametime_cooldown(float curr_game_time, RE::FormID skill);
+
+    std::string resolve_spellname(RE::FormID formID);
+
+    std::string resolve_slot_name(const SlottedSkill& skill);
+
+    EquippedType getPlayerEquipmentType();
+    bool isVampireLord();
+    bool isWerewolf();
+    uint32_t isCustomTransform();
+    custom_transform_spell_type getCustomTransformCasttype();
+
+    bool hasFavMenuSlotBinding();
+
+    std::tuple<bool, float> shouldShowHUDBar();
+    std::tuple<bool, float> shouldShowOblivionHUDBar();
+
+    DefaultIconType get_fallback_icon_type(RE::TESForm* form);
+
+    void add_casteffect(const std::string& key, RE::BGSArtObject* left_art, RE::BGSArtObject* right_art);
+    /*
+    * Should only be called during spell data loading, otherwise resolution map will be null
+    */
+    size_t get_cast_effect_id(const std::string& key);
+
+    void update_spell_casting_art_and_time(size_t art_index, uint32_t casttime, hand_mode hands);
+
+    //void update_spell_casting_art_and_time(size_t art_index, uint32_t casttime);
+
+    /**
+     * Get spell at index of current ingame bar
+     */
+    RE::FormID get_current_spell_in_slot(size_t index);
+
+    SlottedSkill get_current_spell_info_in_slot(size_t index);
+
+    /*
+    * Is the passed spell the "unbind slot" spell?
+    */
+    bool is_clear_spell(RE::FormID spell);
+
+    /*
+    * Is the passed spell the "toggle dual cast" Power?
+    */
+    bool is_toggle_dualcast_spell(RE::FormID spell);
+
+    bool should_dual_cast();
+
+    void add_custom_tranformation(uint32_t bar, std::string name, RE::FormID race_id,
+                                  custom_transform_spell_type cast_type);
+
+    RE::MagicSystem::CastingSource get_cast_hand_from_equip();
+
+    bool player_can_dualcast_spell(RE::SpellItem* spell);
+
+    void set_animtype_global(int value);
+
+    hand_mode set_weapon_dependent_casting_source(hand_mode hand, bool dual_cast);
+
+    void reset_animation_vars();
+
+    void start_cast_timer();
+    void advance_cast_timer(float delta);
+
+    uint16_t chose_default_anim_for_spell(const RE::TESForm* form, int anim, bool anim2);
+
+    GameData::Spell_cast_data get_spell_data(const RE::TESForm* spell, bool fill_defaults = true, bool include_custom_user_data = true);
+
+    void add_animation_data(const std::string& name, int anim_id);
+
+    bool form_has_special_icon(RE::TESForm* form);
+
+    int count_item_in_inv(RE::FormID form);
+
+    bool is_on_binary_cd(RE::FormID skill);
+
+    float get_special_cd(RE::FormID formID);
+
+    int get_spell_rank(int32_t minlevel);
+
+    /*
+    * Checks for this perk, or if the ignore perks global is set
+    */
+    bool player_has_trigger_perk(RE::BGSPerk* perk);
+
+    bool calc_random_proc(RE::TESGlobal* chance);
+
+    /*
+    * Called when a spell is casted to handle some mod compatiblity things
+    */
+    void casted_spell_mod_callback(RE::SpellItem* spell, bool dual_cast, bool spell_proc);
+
+    /**
+    * Get how many spells are allowed to be casted, handles compatibility with mods
+    */
+    std::optional<int> get_spell_charges_mod_compat(RE::SpellItem* spell);
+
+    /**
+    * Check if the passed spell is allowed to be casted, handles mod compatibility
+    */
+    bool can_cast_spell_mod_compat(RE::SpellItem* spell);
+
+    /**
+    * Get the health cost of a spell when using ordinator's dungeon master blood magic side effects
+    */
+    float get_health_cost_mod_ordinator(RE::SpellItem* spell);
+
+    /**
+    * Return if the player has the vancian magic dungeon master life tap side effect
+    */
+    bool player_has_ordinator_bloodmagic();
+
+    /**
+    * Return health cost when using PathOfSorcery Blood Magic
+    */
+    float get_pos_spell_health_cost(RE::SpellItem* spell);
+
+    /**
+    * Called before a spell is casted
+    */
+    void pre_cast_mod_callback(RE::SpellItem* spell);
+    
+    /**
+    * Called after a spell is cast
+    */
+    void post_cast_mod_callback(RE::SpellItem* spell);
+
+    /**
+    * Called every 0.5s during concentrating a spell
+    */
+    void concentration_cast_mod_callback(RE::SpellItem* spell, bool spell_proc);
+
+    /**
+    * Fill list with player known spells, filters out non gui visible skills
+    */
+    void get_player_known_spells(RE::PlayerCharacter* pc, std::vector<RE::TESForm*> & list_of_skills, bool add_unbind_skill = true);
+
+    void add_player_owned_bindable_items(RE::PlayerCharacter* pc, std::vector<RE::TESForm*>& list_of_skills);
+
+    std::string get_modifier_text(key_modifier mod);
+    std::string get_modifier_text_long(key_modifier mod);
+
+    std::string get_key_text_long(int code);
+
+    std::string strip_tooltip(const std::string& input, float magnitude, uint32_t duration);
+
+    void reset_shout_cd();
+    void apply_cd_for_shout(RE::FormID formID);
+    void set_shout_cd(float seconds, float prog, float dur);
+
+    bool save_icon_edits_to_json(std::string path);
+    bool load_icon_edits_from_json(std::string path);
+
+    bool toggle_individual_shout_cooldowns();
+}
+

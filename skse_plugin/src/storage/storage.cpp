@@ -1,0 +1,782 @@
+#include "storage.h"
+#include "art_bind_record.h"
+#include "../logger/logger.h"
+#include "../rendering/render_manager.h"
+#include "../bar/hotbars.h"
+#include "../bar/hotbar.h"
+#include "../input/keybinds.h"
+#include "../input/modes.h"
+#include "../casts/cast_intent.h"
+#include "../casts/casting_controller.h"
+#include "../casts/hyper_armor.h"
+#include "../lifecycle/lifecycle.h"
+#include "runtime_state_reset.h"
+
+namespace SpellHotbar::Storage {
+
+    // The hyperarmor tail is read by version inside its own helper; a writer older than the
+    // format that tail belongs to would drop it silently.
+    static_assert(save_format >= casts::HyperArmor::kHyperArmorSaveFormat,
+        "the co-save writer must be at least the format that appends the hyperarmor settings");
+
+    namespace {
+        bool has_loaded_settings{ false };
+    }
+
+    std::vector<ArtBind> collect_art_binds()
+    {
+        std::vector<ArtBind> binds;
+        const key_modifier mods[] = {
+            key_modifier::none, key_modifier::ctrl, key_modifier::shift, key_modifier::alt
+        };
+        for (auto& [bar_id, bar] : SpellHotbar::Bars::hotbars) {
+            for (auto mod : mods) {
+                const auto& sub = bar.get_sub_bar(mod);
+                for (uint8_t slot = 0; slot < sub.m_slotted_skills.size(); ++slot) {
+                    const auto& skill = sub.m_slotted_skills[slot];
+                    if (skill.type == slot_type::weapon_art && skill.art_id != 0) {
+                        binds.push_back(ArtBind{
+                            .bar_id = bar_id,
+                            .slot = slot,
+                            .modifier = static_cast<uint8_t>(mod),
+                            .art_id = skill.art_id,
+                        });
+                    }
+                }
+            }
+        }
+        return binds;
+    }
+
+    void apply_art_binds(const std::vector<ArtBind>& binds)
+    {
+        for (const auto& bind : binds) {
+            if (!SpellHotbar::Bars::hotbars.contains(bind.bar_id) || bind.slot >= max_bar_size) {
+                logger::warn("WART: dropping art {} (bar {:08x} slot {})", bind.art_id, bind.bar_id, bind.slot);
+                continue;
+            }
+            if (bind.modifier > static_cast<uint8_t>(key_modifier::alt)) {
+                logger::warn("WART: dropping art {} with modifier {}", bind.art_id, bind.modifier);
+                continue;
+            }
+            auto& skill = SpellHotbar::Bars::hotbars.at(bind.bar_id).get_skill_in_bar_by_ref(
+                bind.slot, static_cast<key_modifier>(bind.modifier));
+            skill.update_art_assignment(bind.art_id);
+            logger::info("WART: restored art {} on bar {:08x} slot {}", bind.art_id, bind.bar_id, bind.slot);
+        }
+    }
+
+    bool loaded_existing_settings()
+    {
+        return has_loaded_settings;
+    }
+
+    void reset_all_runtime_state()
+    {
+        reset_runtime_state(
+            Bars::reset_to_defaults,
+            Input::reset_keybinds,
+            GameData::reset_persistent_state,
+            Lifecycle::reset);
+    }
+
+    void RevertCallback(SKSE::SerializationInterface*)
+    {
+        has_loaded_settings = false;
+        reset_all_runtime_state();
+    }
+
+    void SaveCallback(SKSE::SerializationInterface* a_intfc)
+    {
+        logger::trace("Saving to SKSE save...");
+
+        //A hotbar shout's selectedPower swap is held until its clip ends. It is a runtime borrow
+        //and must not be what a save records, so settle it before serializing.
+        casts::CastingController::flush_deferred_power_restore();
+        /// main hotbars data
+        if (!a_intfc->OpenRecord('HOTB', Storage::save_format))
+        {
+            logger::error("Could not store main hotbar settings!");
+        } else {
+
+#ifdef DEBUG_LOG_SERIALIZATION
+            logger::info("Saving 'HOTB' ({}) record, format {}", 'HOTB', Storage::save_format);
+#endif
+
+            a_intfc->WriteRecordData(&Bars::barsize, sizeof(uint8_t));
+            a_intfc->WriteRecordData(&Bars::disable_non_modifier_bar, sizeof(bool));
+
+            a_intfc->WriteRecordData(&Bars::slot_scale, sizeof(float));
+
+            float offset_x_out = RenderManager::scale_from_resolution(Bars::offset_x);
+            a_intfc->WriteRecordData(&offset_x_out, sizeof(float));
+
+            float offset_y_out = RenderManager::scale_from_resolution(Bars::offset_y);
+            a_intfc->WriteRecordData(&offset_y_out, sizeof(float));
+
+            float spacing_out = RenderManager::scale_from_resolution(Bars::slot_spacing);
+            a_intfc->WriteRecordData(&spacing_out, sizeof(float));
+
+            uint8_t anchor = static_cast<uint8_t>(Bars::bar_anchor_point);
+            a_intfc->WriteRecordData(&anchor, sizeof(uint8_t));
+
+            uint8_t text_show = static_cast<uint8_t>(Bars::text_show_setting);
+            a_intfc->WriteRecordData(&text_show, sizeof(uint8_t));
+
+            uint8_t bar_show = static_cast<uint8_t>(Bars::bar_show_setting);
+            a_intfc->WriteRecordData(&bar_show, sizeof(uint8_t));
+
+            uint8_t bar_show_vl = static_cast<uint8_t>(Bars::bar_show_setting_vampire_lord);
+            a_intfc->WriteRecordData(&bar_show_vl, sizeof(uint8_t));
+
+            uint8_t bar_show_ww = static_cast<uint8_t>(Bars::bar_show_setting_werewolf);
+            a_intfc->WriteRecordData(&bar_show_ww, sizeof(uint8_t));
+
+            a_intfc->WriteRecordData(&Bars::use_default_bar_when_sheathed, sizeof(bool));
+            a_intfc->WriteRecordData(&Bars::disable_menu_rendering, sizeof(bool));
+            a_intfc->WriteRecordData(&Bars::disable_non_modifier_bar, sizeof(bool));
+
+            a_intfc->WriteRecordData(&GameData::potion_gcd, sizeof(float));
+
+            //oblivion bar
+            a_intfc->WriteRecordData(&Bars::oblivion_slot_scale, sizeof(float));
+
+            float oblivion_offset_x_out = RenderManager::scale_from_resolution(Bars::oblivion_offset_x);
+            a_intfc->WriteRecordData(&oblivion_offset_x_out, sizeof(float));
+
+            float oblivion_offset_y_out = RenderManager::scale_from_resolution(Bars::oblivion_offset_y);
+            a_intfc->WriteRecordData(&oblivion_offset_y_out, sizeof(float));
+
+            float oblivion_spacing_out = RenderManager::scale_from_resolution(Bars::oblivion_slot_spacing);
+            a_intfc->WriteRecordData(&oblivion_spacing_out, sizeof(float));
+
+            uint8_t oblivion_anchor = static_cast<uint8_t>(Bars::oblivion_bar_anchor_point);
+            a_intfc->WriteRecordData(&oblivion_anchor, sizeof(uint8_t));
+
+            a_intfc->WriteRecordData(&Bars::oblivion_bar_show_power, sizeof(bool));
+
+            uint8_t oblivion_bar_show = static_cast<uint8_t>(Bars::oblivion_bar_show_setting);
+            a_intfc->WriteRecordData(&oblivion_bar_show, sizeof(uint8_t));
+
+            uint8_t input_mode = static_cast<uint8_t>(Input::get_current_mode_index());
+            a_intfc->WriteRecordData(&input_mode, sizeof(uint8_t));
+
+            a_intfc->WriteRecordData(&Bars::bar_row_len, sizeof(uint8_t));
+
+            uint8_t bar_layout = static_cast<uint8_t>(Bars::layout);
+            a_intfc->WriteRecordData(&bar_layout, sizeof(uint8_t));
+
+            a_intfc->WriteRecordData(&Bars::bar_circle_radius, sizeof(float));
+
+            a_intfc->WriteRecordData(&Bars::oblivion_bar_held_show_time_threshold, sizeof(float));
+            a_intfc->WriteRecordData(&Bars::oblivion_bar_vertical, sizeof(bool));
+
+            //V3: Since SpellHotbar2 0.0.5
+            a_intfc->WriteRecordData(&Bars::bar_cross_distance, sizeof(float));
+
+            //V4: since SpellHotbar2 0.0.7
+            a_intfc->WriteRecordData(&Bars::disable_menu_binding, sizeof(bool));
+            bool use_key_icons = Bars::get_use_keybind_icons();
+            a_intfc->WriteRecordData(&use_key_icons, sizeof(bool));
+
+            //V5: since SpellHotbar2 0.0.13
+            a_intfc->WriteRecordData(&GameData::individual_shout_cooldowns, sizeof(bool));
+
+            //V7: the tunable spell GCD
+            a_intfc->WriteRecordData(&GameData::spell_gcd, sizeof(float));
+
+            //V9: the in-menu dock's own position, scale and spacing
+            a_intfc->WriteRecordData(&Bars::menu_slot_scale, sizeof(float));
+
+            float menu_offset_x_out = RenderManager::scale_from_resolution(Bars::menu_offset_x);
+            a_intfc->WriteRecordData(&menu_offset_x_out, sizeof(float));
+
+            float menu_offset_y_out = RenderManager::scale_from_resolution(Bars::menu_offset_y);
+            a_intfc->WriteRecordData(&menu_offset_y_out, sizeof(float));
+
+            float menu_spacing_out = RenderManager::scale_from_resolution(Bars::menu_slot_spacing);
+            a_intfc->WriteRecordData(&menu_spacing_out, sizeof(float));
+
+            uint8_t menu_anchor = static_cast<uint8_t>(Bars::menu_bar_anchor_point);
+            a_intfc->WriteRecordData(&menu_anchor, sizeof(uint8_t));
+
+            //V10: Ability hyperarmor's two FLICK settings
+            casts::HyperArmor::write_hyper_armor_settings(
+                [a_intfc](const void* data, std::size_t size) {
+                    return a_intfc->WriteRecordData(data, static_cast<uint32_t>(size));
+                },
+                casts::HyperArmor::HyperArmorSettings{
+                    .stagger_immunity = GameData::ability_stagger_immunity,
+                    .damage_reduction = GameData::ability_damage_reduction,
+                });
+            //Version end
+
+            //write keybinds, make saves compatible when new binds are added
+            uint8_t num_keybinds = static_cast<uint8_t>(Input::keybind_id::num_keys);
+            a_intfc->WriteRecordData(&num_keybinds, sizeof(uint8_t));
+#ifdef DEBUG_LOG_SERIALIZATION
+            logger::info("Writing {} keybinds", num_keybinds);
+#endif
+
+            for (uint8_t i = 0U; i < num_keybinds; i++) {
+                int16_t key = static_cast<int16_t>(Input::get_keybind(i)); //key can be -1 and >255, we need 2bytes
+#ifdef DEBUG_LOG_SERIALIZATION
+                logger::info(" key {}: {}", i, key);
+#endif
+                a_intfc->WriteRecordData(&key, sizeof(int16_t));
+            }
+        }
+
+        for (const auto& [k, v]: SpellHotbar::Bars::hotbars)
+        {
+            v.serialize(a_intfc, k);
+        }
+        GameData::oblivion_bar.serialize(a_intfc, 'OBLB');
+
+        const auto art_binds = collect_art_binds();
+        if (!a_intfc->OpenRecord(wart_record, Storage::save_format)) {
+            logger::error("Could not store ability binds!");
+        } else {
+            const auto bytes = encode_art_binds(art_binds);
+            if (!a_intfc->WriteRecordData(bytes.data(), static_cast<uint32_t>(bytes.size()))) {
+                logger::error("Failed to write ability binds");
+            } else {
+                logger::info("Saved {} ability bind(s)", art_binds.size());
+            }
+        }
+
+        // Save GameData values
+        if (!a_intfc->OpenRecord('GDAT', Storage::save_format)) {
+            logger::error("Could not store game_data values!");
+        } else {
+            GameData::save_to_SKSE_save(a_intfc);
+        }
+
+        // Save custom spelldata if present
+        if (!GameData::user_spell_cast_info.empty()) {
+            if (!a_intfc->OpenRecord('SDAT', Storage::save_format)) {
+                logger::error("Could not store user spell data values!");
+            }
+            else {
+                GameData::save_user_spell_data_to_SKSE_save(a_intfc);
+            }
+        }
+
+        // Save custom icondata if present
+        if (!GameData::user_custom_entry_info.empty()) {
+            if (!a_intfc->OpenRecord('UDAT', Storage::save_format)) {
+                logger::error("Could not store user icon info values!");
+            }
+            else {
+                GameData::save_user_entry_info_to_SKSE_save(a_intfc);
+            }
+        }
+
+    }
+
+    template <typename T>
+    inline bool read_clamped(SKSE::SerializationInterface* a_intfc, const std::string & name, T & target, T min, T max) {
+        T read_value{};
+        if (!a_intfc->ReadRecordData(&read_value, sizeof(T))) {
+            logger::error("Failed to read '{}'!", name);
+            return false;
+        }
+        else {
+            target = std::clamp(read_value, min, max);
+        }
+        return true;
+    }
+
+
+    void LoadCallback(SKSE::SerializationInterface* a_intfc)
+    {
+        logger::trace("Loading from SKSE save...");
+        //A cast intent pending from the session being left behind names a slot on a bar that is
+        //about to be replaced. ShoutMCO abandons it on a game load too; withdrawing here does not
+        //depend on that.
+        casts::CastIntent::cancel();
+        casts::CastingController::drop_live_cast();
+
+        has_loaded_settings = false;
+        reset_all_runtime_state();
+
+        uint32_t type{0};
+        uint32_t version{0};
+        uint32_t length{0};
+        while (a_intfc->GetNextRecordInfo(type, version, length)) {
+#ifdef  DEBUG_LOG_SERIALIZATION
+            logger::info("Loading {}, version {} with length {}", type, version, length);
+#endif //  DEBUG_LOG_SERIALIZATION
+
+            if (type == 'HOTB')
+            {
+                has_loaded_settings = true;
+                //HOTB is now variable length
+                //logger::trace("Reading 'HOTB' data from save...");
+                //if (length != ((sizeof(bool) * 3) + (sizeof(uint8_t) * 6) + (sizeof(float)* 3) )) {
+                //    logger::error("Invalid Record data length for 'HOTB'");
+                //}
+                //else
+                //{
+                if (!a_intfc->ReadRecordData(&Bars::barsize, sizeof(uint8_t))) {
+                    logger::error("Failed to read bar_size!");
+                    break;
+                }
+                if (!a_intfc->ReadRecordData(&Bars::disable_non_modifier_bar, sizeof(bool))) {
+                    logger::error("Failed to read disable_non_modifier_bar!");
+                    break;
+                }
+                if (!a_intfc->ReadRecordData(&Bars::slot_scale, sizeof(float))) {
+                    logger::error("Failed to read slot_scale!");
+                    break;
+                }
+                float read_offset_x{ 0.0f };
+                if (!a_intfc->ReadRecordData(&read_offset_x, sizeof(float))) {
+                    logger::error("Failed to read offset_x!");
+                    break;
+                }
+                else {
+                    Bars::offset_x = RenderManager::scale_to_resolution(read_offset_x);
+                }
+                float read_offset_y{ 0.0f };
+                if (!a_intfc->ReadRecordData(&read_offset_y, sizeof(float))) {
+                    logger::error("Failed to read offset_y!");
+                    break;
+                }
+                else {
+                    Bars::offset_y = RenderManager::scale_to_resolution(read_offset_y);
+                }
+                float read_spacing{0};
+                if (!a_intfc->ReadRecordData(&read_spacing, sizeof(float))) {
+                    logger::error("Failed to read slot_spacing!");
+                    break;
+                } else {
+                    Bars::slot_spacing = RenderManager::scale_to_resolution(std::max(0.0f, read_spacing));
+                }
+
+                uint8_t anchor{0};
+                if (!a_intfc->ReadRecordData(&anchor, sizeof(uint8_t))) {
+                    logger::error("Failed to read bar anchor point!");
+                    break;
+                }
+                else {
+                    Bars::bar_anchor_point = Bars::anchor_point(std::clamp(anchor, 0Ui8, static_cast<uint8_t>(Bars::anchor_point::CENTER)));
+                }
+
+                uint8_t text_show{0};
+                if (!a_intfc->ReadRecordData(&text_show, sizeof(uint8_t))) {
+                    logger::error("Failed to read text_show_setting!");
+                    break;
+                } else {
+                    Bars::text_show_setting = Bars::text_show_mode(std::clamp(text_show, 0Ui8, 2Ui8));
+                }
+
+                uint8_t bar_show{0};
+                if (!a_intfc->ReadRecordData(&bar_show, sizeof(uint8_t))) {
+                    logger::error("Failed to read bar_show_setting!");
+                    break;
+                } else {
+                    Bars::bar_show_setting = Bars::bar_show_mode(std::clamp(bar_show, 0Ui8, 5Ui8));
+                }
+
+                uint8_t bar_show_vl{0};
+                if (!a_intfc->ReadRecordData(&bar_show_vl, sizeof(uint8_t))) {
+                    logger::error("Failed to read bar_show_setting vampire_lord!");
+                    break;
+                } else {
+                    Bars::bar_show_setting_vampire_lord = Bars::bar_show_mode(std::clamp(bar_show_vl, 0Ui8, 2Ui8));
+                }
+
+                uint8_t bar_show_ww{0};
+                if (!a_intfc->ReadRecordData(&bar_show_ww, sizeof(uint8_t))) {
+                    logger::error("Failed to read bar_show_setting werewolf!");
+                    break;
+                } else {
+                    Bars::bar_show_setting_werewolf = Bars::bar_show_mode(std::clamp(bar_show_ww, 0Ui8, 2Ui8));
+                }
+
+                if (!a_intfc->ReadRecordData(&Bars::use_default_bar_when_sheathed, sizeof(bool))) {
+                    logger::error("Failed to read use_default_bar_when_sheathed!");
+                    break;
+                }
+
+                if (!a_intfc->ReadRecordData(&Bars::disable_menu_rendering, sizeof(bool))) {
+                    logger::error("Failed to read disable_menu_rendering!");
+                    break;
+                }
+
+                if (!a_intfc->ReadRecordData(&Bars::disable_non_modifier_bar, sizeof(bool))) {
+                    logger::error("Failed to read disable_non_modifier_bar!");
+                    break;
+                }
+
+                if (!a_intfc->ReadRecordData(&GameData::potion_gcd, sizeof(float))) {
+                    logger::error("Failed to read potion gcd!");
+                    break;
+                }
+
+                // oblivion bar setting
+                if (!a_intfc->ReadRecordData(&Bars::oblivion_slot_scale, sizeof(float))) {
+                    logger::error("Failed to read oblivion bar slot_scale!");
+                    break;
+                }
+                float read_oblivion_offset_x{ 0.0f };
+                if (!a_intfc->ReadRecordData(&read_oblivion_offset_x, sizeof(float))) {
+                    logger::error("Failed to read oblivion bar offset_x!");
+                    break;
+                }
+                else {
+                    Bars::oblivion_offset_x = RenderManager::scale_to_resolution(read_oblivion_offset_x);
+                }
+                float read_oblivion_offset_y{ 0.0f };
+                if (!a_intfc->ReadRecordData(&read_oblivion_offset_y, sizeof(float))) {
+                    logger::error("Failed to read oblivion bar offset_y!");
+                    break;
+                }
+                else {
+                    Bars::oblivion_offset_y = RenderManager::scale_to_resolution(read_oblivion_offset_y);
+                }
+                float read_oblivion_spacing{ 0 };
+                if (!a_intfc->ReadRecordData(&read_oblivion_spacing, sizeof(float))) {
+                    logger::error("Failed to read oblivion bar slot_spacing!");
+                    break;
+                }
+                else {
+                    Bars::oblivion_slot_spacing = RenderManager::scale_to_resolution(std::max(0.0f, read_oblivion_spacing));
+                }
+
+                uint8_t oblivion_anchor{ 0 };
+                if (!a_intfc->ReadRecordData(&oblivion_anchor, sizeof(uint8_t))) {
+                    logger::error("Failed to read bar oblivion bar anchor point!");
+                    break;
+                }
+                else {
+                    Bars::oblivion_bar_anchor_point = Bars::anchor_point(std::clamp(oblivion_anchor, 0Ui8, static_cast<uint8_t>(Bars::anchor_point::CENTER)));
+                }
+                if (!a_intfc->ReadRecordData(&Bars::oblivion_bar_show_power, sizeof(bool))) {
+                    logger::error("Failed to read oblivion_bar_show_power!");
+                    break;
+                }
+
+                uint8_t oblivion_bar_show{ 0 };
+                if (!a_intfc->ReadRecordData(&oblivion_bar_show, sizeof(uint8_t))) {
+                    logger::error("Failed to read oblivion_bar_show_setting!");
+                    break;
+                }
+                else {
+                    Bars::oblivion_bar_show_setting = Bars::bar_show_mode(std::clamp(oblivion_bar_show, 0Ui8, 5Ui8));
+                }
+
+                uint8_t input_mode{ 0 };
+                if (!a_intfc->ReadRecordData(&input_mode, sizeof(uint8_t))) {
+                    logger::error("Failed to read input mode!");
+                    break;
+                }
+                else {
+                    SpellHotbar::Input::set_input_mode(static_cast<int>(input_mode));
+                }
+
+                uint8_t read_row_len{ 0 };
+                if (!a_intfc->ReadRecordData(&read_row_len, sizeof(uint8_t))) {
+                    logger::error("Failed to read bar_row_len!");
+                    break;
+                }
+                else {
+                    Bars::bar_row_len = std::clamp(read_row_len, 1Ui8, static_cast<uint8_t>(max_bar_size));
+                }
+
+                uint8_t read_bar_layout{ 0 };
+                if (!a_intfc->ReadRecordData(&read_bar_layout, sizeof(uint8_t))) {
+                    logger::error("Failed to read bar_layout!");
+                    break;
+                }
+                else {
+                    Bars::layout = Bars::bar_layout(std::clamp(read_bar_layout, 0Ui8, 2Ui8));
+                }
+
+                float read_bar_circle_radius{ 0 };
+                if (!a_intfc->ReadRecordData(&read_bar_circle_radius, sizeof(float))) {
+                    logger::error("Failed to read bar_circle_radius!");
+                    break;
+                }
+                else {
+                    Bars::bar_circle_radius = std::clamp(read_bar_circle_radius, 0.1f, 10.0f);
+                }
+
+                float read_oblivion_bar_held_show_time_threshold{ 0.0f };
+                if (!a_intfc->ReadRecordData(&read_oblivion_bar_held_show_time_threshold, sizeof(float))) {
+                    logger::error("Failed to read oblivion_bar_held_show_time_threshold!");
+                    break;
+                }
+                else {
+                    Bars::oblivion_bar_held_show_time_threshold = std::clamp(read_oblivion_bar_held_show_time_threshold, 0.0f, 5.0f);
+                }
+
+                if (!a_intfc->ReadRecordData(&Bars::oblivion_bar_vertical, sizeof(bool))) {
+                    logger::error("Failed to read oblivion_bar_vertical!");
+                    break;
+                }
+
+                if (version >= 3U) { //Since SpellHotbar2 0.0.5
+                    float read_bar_cross_distance{ 0 };
+                    if (!a_intfc->ReadRecordData(&read_bar_cross_distance, sizeof(float))) {
+                        logger::error("Failed to read bar_cross_distance!");
+                        break;
+                    }
+                    else {
+                        Bars::bar_cross_distance = std::clamp(read_bar_cross_distance, 0.0f, 1.0f);
+#ifdef DEBUG_LOG_SERIALIZATION
+                        logger::info("Loaded Bar Cross Distance: {}", read_bar_cross_distance);
+#endif
+                    }
+                }
+                else
+                {
+                    Bars::bar_cross_distance = 0.0f;
+                }
+
+                if (version >= 4U) { //Since SpellHotbar2 0.0.7
+                    if (!a_intfc->ReadRecordData(&Bars::disable_menu_binding, sizeof(bool))) {
+                        logger::error("Failed to read disable_menu_binding!");
+                        break;
+                    }
+                    else {
+#ifdef DEBUG_LOG_SERIALIZATION
+                        logger::info("Loaded Bars::disable_menu_binding: {}", Bars::disable_menu_binding);
+#endif
+                    }
+                    bool read_use_keybind_icons{ false };
+                    if (!a_intfc->ReadRecordData(&read_use_keybind_icons, sizeof(bool))) {
+                        logger::error("Failed to read use_keybind_icons!");
+                        break;
+                    }
+                    else {
+                        Bars::set_use_keybind_icons(read_use_keybind_icons);
+#ifdef DEBUG_LOG_SERIALIZATION
+                        logger::info("Loaded Bars::use_keybind_icons: {}", read_use_keybind_icons);
+#endif
+                    }
+                }
+                else {
+                    Bars::disable_menu_binding = false;
+                    Bars::set_use_keybind_icons(false);
+                }
+
+                if (version >= 5U) { //since 0.0.13
+                    bool read_individual_shout_cooldowns{ false };
+                    if (!a_intfc->ReadRecordData(&read_individual_shout_cooldowns, sizeof(bool))) {
+                        logger::error("Failed to read individual_shout_cooldowns!");
+                        break;
+                    }
+                    else {
+#ifdef DEBUG_LOG_SERIALIZATION
+                        logger::info("Loaded GameData::individual_shout_cooldowns: {}", read_individual_shout_cooldowns);
+#endif
+                        if (read_individual_shout_cooldowns != GameData::individual_shout_cooldowns) {
+                            GameData::toggle_individual_shout_cooldowns();
+                        }
+                    }
+                }
+
+                if (version >= 7U) {  // the tunable spell GCD
+                    float read_spell_gcd{ 1.5f };
+                    if (!a_intfc->ReadRecordData(&read_spell_gcd, sizeof(float))) {
+                        logger::error("Failed to read spell gcd!");
+                        break;
+                    }
+                    else {
+                        GameData::spell_gcd = std::clamp(read_spell_gcd, 0.1f, 10.0f);
+#ifdef DEBUG_LOG_SERIALIZATION
+                        logger::info("Loaded GameData::spell_gcd: {}", GameData::spell_gcd);
+#endif
+                    }
+                }
+
+                if (version >= 9U) {  // the in-menu dock
+                    if (!a_intfc->ReadRecordData(&Bars::menu_slot_scale, sizeof(float))) {
+                        logger::error("Failed to read menu bar slot_scale!");
+                        break;
+                    }
+                    float read_menu_offset_x{ 0.0f };
+                    if (!a_intfc->ReadRecordData(&read_menu_offset_x, sizeof(float))) {
+                        logger::error("Failed to read menu bar offset_x!");
+                        break;
+                    }
+                    else {
+                        Bars::menu_offset_x = RenderManager::scale_to_resolution(read_menu_offset_x);
+                    }
+                    float read_menu_offset_y{ 0.0f };
+                    if (!a_intfc->ReadRecordData(&read_menu_offset_y, sizeof(float))) {
+                        logger::error("Failed to read menu bar offset_y!");
+                        break;
+                    }
+                    else {
+                        Bars::menu_offset_y = RenderManager::scale_to_resolution(read_menu_offset_y);
+                    }
+                    float read_menu_spacing{ 0.0f };
+                    if (!a_intfc->ReadRecordData(&read_menu_spacing, sizeof(float))) {
+                        logger::error("Failed to read menu bar slot_spacing!");
+                        break;
+                    }
+                    else {
+                        Bars::menu_slot_spacing = RenderManager::scale_to_resolution(std::max(0.0f, read_menu_spacing));
+                    }
+                    uint8_t menu_anchor{ 0 };
+                    if (!a_intfc->ReadRecordData(&menu_anchor, sizeof(uint8_t))) {
+                        logger::error("Failed to read menu bar anchor point!");
+                        break;
+                    }
+                    else {
+                        Bars::menu_bar_anchor_point = Bars::anchor_point(std::clamp(menu_anchor, 0Ui8, static_cast<uint8_t>(Bars::anchor_point::CENTER)));
+                    }
+                }
+
+                {  // V10: Ability hyperarmor. Older formats read nothing and keep the defaults.
+                    casts::HyperArmor::HyperArmorSettings hyper_armor;
+                    if (!casts::HyperArmor::read_hyper_armor_settings(
+                            [a_intfc](void* data, std::size_t size) {
+                                return a_intfc->ReadRecordData(data, static_cast<uint32_t>(size)) == size;
+                            },
+                            version, hyper_armor)) {
+                        logger::error("Failed to read Ability hyperarmor settings!");
+                        break;
+                    }
+                    GameData::ability_stagger_immunity = hyper_armor.stagger_immunity;
+                    GameData::ability_damage_reduction = hyper_armor.damage_reduction;
+                }
+
+                //read num keybinds, make saves compatible when new binds are added
+                uint8_t num_keybinds{ 0U };
+                a_intfc->ReadRecordData(&num_keybinds, sizeof(uint8_t));
+
+#ifdef DEBUG_LOG_SERIALIZATION
+                logger::info("Loading {} keybinds", num_keybinds);
+#endif
+
+                for (uint8_t i = 0U; i < num_keybinds; i++) {
+                    int16_t key{ -1 };
+                    a_intfc->ReadRecordData(&key, sizeof(int16_t));
+                    Input::rebind_key(i, key, false);
+#ifdef DEBUG_LOG_SERIALIZATION
+                    logger::info(" Key {}: {}", i, key);
+#endif
+                }
+                //assign keys with -1 that might have not been saved due older version
+                while (num_keybinds < static_cast<uint8_t>(Input::keybind_id::num_keys)) {
+                    Input::rebind_key(num_keybinds, -1, false);
+#ifdef DEBUG_LOG_SERIALIZATION
+                    logger::info(" Key {}: -1 (Default)", num_keybinds);
+#endif
+                    num_keybinds++;
+                }
+                //The bind-menu key shipped unbound, so every existing save carries -1 for it and
+                //a new C++ default alone would never reach a player who already has a save, so
+                //the default is applied here. The default is H; an earlier default was C (DIK 46).
+                //A save still on C got it from this very line, never from a player's choice, so
+                //it is moved along with the unbound case.
+                {
+                    const int current = Input::get_keybind(Input::keybind_id::open_advanced_bind_menu);
+                    constexpr int dik_c = 46;
+                    constexpr int dik_h = 35;
+                    if (current < 0 || current == dik_c) {
+                        Input::rebind_key(Input::keybind_id::open_advanced_bind_menu, dik_h, false);
+                        logger::info("Bind-menu key was {} in this save; defaulting it to H", current < 0 ? "unbound" : "the old default C");
+                    }
+                }
+                //}
+            }
+            else if (type =='GDAT')
+            {
+                logger::trace("Reading 'GDAT' data from save...");
+                GameData::load_from_SKSE_save(a_intfc);
+            }
+            else if (type == 'SDAT') {
+                logger::trace("Reading 'SDAT' data from save...");
+                GameData::load_user_spell_data_from_SKSE_save(a_intfc, version);
+            }
+            else if (type == 'UDAT') {
+                logger::trace("Reading 'UDAT' data from save...");
+                GameData::load_user_entry_info_from_SKSE_save(a_intfc, version);
+            }
+            else if (type == 'OBLB') {
+                logger::trace("Reading 'OBLB' data from save...");
+                GameData::oblivion_bar.deserialize(a_intfc, type, version, length);
+            }
+            else if (type == wart_record) {
+                if (length > max_art_bind_record_bytes) {
+                    logger::error("Weapon art bind record declares {} bytes, over the {} cap; skipped",
+                                  length, max_art_bind_record_bytes);
+                } else {
+                    std::vector<uint8_t> bytes(length);
+                    if (length > 0 && a_intfc->ReadRecordData(bytes.data(), length) != length) {
+                        logger::error("Failed to read ability binds");
+                    } else {
+                        std::vector<ArtBind> binds;
+                        if (!decode_art_binds(bytes, binds)) {
+                            logger::error("Weapon art bind record was truncated");
+                        } else {
+                            apply_art_binds(binds);
+                        }
+                    }
+                }
+            }
+            else if (SpellHotbar::Bars::hotbars.contains(type))
+            {
+#ifdef DEBUG_LOG_SERIALIZATION
+            logger::info("Loaded bar: {}", type);
+#endif // DEBUG_LOG_SERIALIZATION
+
+                SpellHotbar::Bars::hotbars.at(type).deserialize(a_intfc, type, version, length);
+            }
+            else
+            {
+                logger::warn("Unknown Record Type: {}, with length: {}", type, length);
+            }
+
+        }
+
+        RenderManager::on_game_load();
+    }
+
+    bool slotSpell_internal(RE::FormID form, size_t index, uint32_t bar_id)
+    {
+        
+        if (Bars::hotbars.contains(bar_id)) {
+            try {
+                auto& bar = Bars::hotbars.at(bar_id);
+
+                bar.slot_spell(index, form, Bars::get_current_modifier());
+                RenderManager::highlight_skill_slot(static_cast<int>(index));
+                return true;
+            } catch (std::exception& e) {
+                std::string msg = e.what();
+                logger::error("C++ Exception: {}", msg);
+                return false;
+            }
+        }
+        return false;
+    }
+
+    bool slotSpell(RE::FormID form, size_t index, menu_slot_type slot_type)
+    {
+        uint32_t bar;
+        switch (slot_type) {
+            case SpellHotbar::Storage::menu_slot_type::vampire_lord:
+                bar = Bars::VAMPIRE_LORD_BAR;
+                break;
+            case SpellHotbar::Storage::menu_slot_type::werewolf:
+                bar = Bars::WEREWOLF_BAR;
+                break;
+            case SpellHotbar::Storage::menu_slot_type::custom_favmenu:
+                bar = GameData::isCustomTransform();
+                break;
+            case SpellHotbar::Storage::menu_slot_type::magic_menu:
+            default:
+                bar = Bars::menu_bar_id;
+                break;
+        }
+
+        return slotSpell_internal(form, index, bar);
+    }
+
+}

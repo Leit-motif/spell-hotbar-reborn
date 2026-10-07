@@ -1,0 +1,173 @@
+#include "keybinds.h"
+#include "modes.h"
+#include "../logger/logger.h"
+
+namespace SpellHotbar::Input {
+
+	std::array<KeyBind, 12> key_spells{
+		KeyBind{RE::INPUT_DEVICE::kNone, 0},  //2
+		KeyBind{RE::INPUT_DEVICE::kNone, 0},  //3
+		KeyBind{RE::INPUT_DEVICE::kNone, 0},  //4
+		KeyBind{RE::INPUT_DEVICE::kNone, 0},  //5
+		KeyBind{RE::INPUT_DEVICE::kNone, 0},  //6
+		KeyBind{RE::INPUT_DEVICE::kNone, 0},  //7
+		KeyBind{RE::INPUT_DEVICE::kNone, 0},  //8
+		KeyBind{RE::INPUT_DEVICE::kNone, 0},  //9
+		KeyBind{RE::INPUT_DEVICE::kNone, 0}, //10
+		KeyBind{RE::INPUT_DEVICE::kNone, 0}, //11
+		KeyBind{RE::INPUT_DEVICE::kNone, 0}, //12
+		KeyBind{RE::INPUT_DEVICE::kNone, 0}  //13
+	};
+
+	KeyBind key_prev {RE::INPUT_DEVICE::kNone, 0}; //75
+	KeyBind key_next {RE::INPUT_DEVICE::kNone, 0};  //77
+
+	KeyBind key_oblivion_cast{ RE::INPUT_DEVICE::kNone, 0 }; // 47 V
+	KeyBind key_oblivion_potion{ RE::INPUT_DEVICE::kNone, 0 }; //45 B
+
+	//Unbound in the C++ default. On save load, storage.cpp assigns H to a save that carries this
+	//key unbound or on C (DIK 46), so in practice the bind menu opens on H.
+	KeyBind key_open_advanced_bind_menu{ RE::INPUT_DEVICE::kNone, 0 };
+
+	KeyModifier mod_1(RE::INPUT_DEVICE::kNone, 0, 0); //ctrl 29, 157
+	KeyModifier mod_2(RE::INPUT_DEVICE::kNone, 0, 0); //shift 42, 54
+	KeyModifier mod_3(RE::INPUT_DEVICE::kNone, 0, 0);  //alt 56, 184
+
+	KeyModifier mod_dual_cast(RE::INPUT_DEVICE::kNone, 0, 0);
+	KeyModifier mod_show_bar(RE::INPUT_DEVICE::kNone, 0, 0);
+	KeyModifier mod_oblivion_show_bar(RE::INPUT_DEVICE::kNone, 0, 0);
+
+	KeyModifier mod_alt(RE::INPUT_DEVICE::kKeyboard, 56, 184);  //fixed modifier, used for gui
+	//KeyModifier mod_shift(RE::INPUT_DEVICE::kKeyboard, 42, 54);  //fixed modifier, used for gui
+
+	inline void _check_unbind(KeyBind & bind, int code) {
+		if (bind.get_dx_scancode() == code) {
+			bind.unbind();
+		}
+	}
+
+	inline void _check_unbind(KeyModifier& mod, int code) {
+		if (mod.get_dx_scancode() == code || mod.get_dx_scancode2() == code) {
+			mod.rebind(-1);
+		}
+	}
+
+	void unbind_if_already_used(int code) {
+		//check remove binds if already used
+		for (size_t i = 0Ui64; i < key_spells.size(); ++i) {
+			_check_unbind(key_spells[i], code);
+		}
+		_check_unbind(key_next, code);
+		_check_unbind(key_prev, code);
+		_check_unbind(mod_1, code);
+		_check_unbind(mod_2, code);
+		_check_unbind(mod_3, code);
+		_check_unbind(mod_show_bar, code);
+		_check_unbind(key_open_advanced_bind_menu, code);
+	}
+
+	int rebind_key(int slot, int code, bool check_conflicts)
+	{
+		if (check_conflicts) unbind_if_already_used(code);
+		if (slot >= 0 && slot <= keybind_id::spell_12) {
+			key_spells[slot].assign_from_dx_scancode(code);
+			return key_spells[slot].get_dx_scancode();
+		}
+		else if (slot == keybind_id::ui_next) {
+			key_next.assign_from_dx_scancode(code);
+			return key_next.get_dx_scancode();
+		}
+		else if (slot == keybind_id::ui_prev) {
+			key_prev.assign_from_dx_scancode(code);
+			return key_prev.get_dx_scancode();
+		}
+		else if (slot == keybind_id::modifier_1) {
+			mod_1.rebind(code);
+			return mod_1.get_dx_scancode();
+		}
+		else if (slot == keybind_id::modifier_2) {
+			mod_2.rebind(code);
+			return mod_2.get_dx_scancode();
+		}
+		else if (slot == keybind_id::modifier_3) {
+			mod_3.rebind(code);
+			return mod_3.get_dx_scancode();
+		}
+		else if (slot == keybind_id::dual_casting_mod) {
+			mod_dual_cast.rebind(code);
+			return mod_dual_cast.get_dx_scancode();
+		}
+		else if (slot == keybind_id::show_bar_mod) {
+			mod_show_bar.rebind(code);
+			return mod_show_bar.get_dx_scancode();
+		}
+		else if (slot == keybind_id::oblivion_cast) {
+			key_oblivion_cast.assign_from_dx_scancode(code);
+			return key_oblivion_cast.get_dx_scancode();
+		}
+		else if (slot == keybind_id::oblivion_potion) {
+			key_oblivion_potion.assign_from_dx_scancode(code);
+			return key_oblivion_potion.get_dx_scancode();
+		}
+		else if (slot == keybind_id::oblivion_show_bar_mod) {
+			mod_oblivion_show_bar.rebind(code);
+			return mod_oblivion_show_bar.get_dx_scancode();
+		}
+		else if (slot == keybind_id::open_advanced_bind_menu) {
+			key_open_advanced_bind_menu.assign_from_dx_scancode(code);
+			return key_open_advanced_bind_menu.get_dx_scancode();
+		}
+
+		return 0;
+	}
+
+	void reset_keybinds()
+	{
+		for (int slot = 0; slot < keybind_id::num_keys; ++slot) {
+			rebind_key(slot, -1, false);
+		}
+		set_input_mode(0);
+	}
+
+	int get_keybind(int slot)
+	{
+		if (slot >= 0 && slot <= keybind_id::spell_12) {
+			return key_spells[slot].get_dx_scancode();
+		}
+		else if (slot == keybind_id::ui_next) {
+			return key_next.get_dx_scancode();
+		}
+		else if (slot == keybind_id::ui_prev) {
+			return key_prev.get_dx_scancode();
+		}
+		else if (slot == keybind_id::modifier_1) {
+			return mod_1.get_dx_scancode();
+		}
+		else if (slot == keybind_id::modifier_2) {
+			return mod_2.get_dx_scancode();
+		}
+		else if (slot == keybind_id::modifier_3) {
+			return mod_3.get_dx_scancode();
+		}
+		else if (slot == keybind_id::dual_casting_mod) {
+			return mod_dual_cast.get_dx_scancode();
+		}
+		else if (slot == keybind_id::show_bar_mod) {
+			return mod_show_bar.get_dx_scancode();
+		}
+		else if (slot == keybind_id::oblivion_cast) {
+			return key_oblivion_cast.get_dx_scancode();
+		}
+		else if (slot == keybind_id::oblivion_potion) {
+			return key_oblivion_potion.get_dx_scancode();
+		}
+		else if (slot == keybind_id::oblivion_show_bar_mod) {
+			return mod_oblivion_show_bar.get_dx_scancode();
+		}
+		else if (slot == keybind_id::open_advanced_bind_menu) {
+			return key_open_advanced_bind_menu.get_dx_scancode();
+		}
+		return 0;
+	}
+
+}

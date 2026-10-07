@@ -1,0 +1,21 @@
+FormKey: 000851:SpellHotbar.esp
+EditorID: SpellHotbar_AbilityHyperArmorPerk
+Name:
+  TargetLanguage: English
+  Value: Ability Hyperarmor
+Description:
+  TargetLanguage: English
+  Value: ''
+NumRanks: 1
+Hidden: True
+Effects:
+- MutagenObjectType: PerkEntryPointModifyValue
+  EntryPoint: ModIncomingDamage
+  PerkConditionTabCount: 3
+  Modification: Multiply
+  Value: 1
+- MutagenObjectType: PerkEntryPointModifyValue
+  EntryPoint: ModIncomingStagger
+  PerkConditionTabCount: 2
+  Modification: Multiply
+  Value: 1

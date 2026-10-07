@@ -1,0 +1,8 @@
+		<hkobject name="#shtb$3" class="hkbStateMachineEventPropertyArray" signature="0xb07b4388">
+			<hkparam name="events" numelements="1">
+				<hkobject>
+					<hkparam name="id">$eventID[SH2_CastEnter]$</hkparam>
+					<hkparam name="payload">null</hkparam>
+				</hkobject>
+			</hkparam>
+		</hkobject>

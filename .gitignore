@@ -1,0 +1,7 @@
+build/
+install/
+vcpkg_installed/
+.vs/
+.vscode/
+__pycache__/
+*.py[cod]

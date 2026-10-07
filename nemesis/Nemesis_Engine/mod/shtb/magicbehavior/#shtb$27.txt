@@ -1,0 +1,12 @@
+		<hkobject name="#shtb$27" class="hkbStateMachineStateInfo" signature="0xed7f9d0">
+			<hkparam name="variableBindingSet">null</hkparam>
+			<hkparam name="listeners" numelements="0"></hkparam>
+			<hkparam name="enterNotifyEvents">#shtb$3</hkparam>
+			<hkparam name="exitNotifyEvents">#shtb$4</hkparam>
+			<hkparam name="transitions">#shtb$26</hkparam>
+			<hkparam name="generator">#shtb$30</hkparam>
+			<hkparam name="name">SH2_Channel_State</hkparam>
+			<hkparam name="stateId">746006</hkparam>
+			<hkparam name="probability">1.000000</hkparam>
+			<hkparam name="enable">true</hkparam>
+		</hkobject>

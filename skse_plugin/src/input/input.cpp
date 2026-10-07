@@ -4,6 +4,7 @@
 #include <utility>
 #include <unordered_map>
 #include "input_event_adapter.h"
+#include "control_map_compat.h"
 #include "keybinds.h"
 #include "../flick/flick_watch.h"
 #include "../logger/logger.h"
@@ -896,7 +897,7 @@ namespace SpellHotbar::Input {
         }
 
         const auto* control_map = RE::ControlMap::GetSingleton();
-        if (!control_map || !control_map->IsMovementControlsEnabled()) // || !control_map->IsFightingControlsEnabled()) this is not working in 1170 and probably not needed anyway
+        if (!control_map || !ControlMapCompat::movement_controls_enabled(control_map))
         {
             return false;
         }
@@ -1049,7 +1050,7 @@ namespace SpellHotbar::Input {
             return false;
         }
         const auto* control_map = RE::ControlMap::GetSingleton();
-        if (control_map && (control_map->textEntryCount > 0))
+        if (control_map && (ControlMapCompat::text_entry_count(control_map) > 0))
         {
             return false;
         }

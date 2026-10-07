@@ -22,6 +22,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include "../input/control_map_compat.h"
 #include <fstream>
 #include <random>
 #include <rapidjson/rapidjson.h>
@@ -980,7 +981,7 @@ namespace SpellHotbar::GameData {
         }*/
         //not sure what exactly contextPriorityStack does anyway
         if (const auto* control_map = RE::ControlMap::GetSingleton();
-            !control_map || !control_map->IsMovementControlsEnabled())
+            !control_map || !Input::ControlMapCompat::movement_controls_enabled(control_map))
         { 
             return std::make_tuple(false, fast_fade);
         }
@@ -1066,7 +1067,7 @@ namespace SpellHotbar::GameData {
             return std::make_tuple(false, fast_fade);
         }
         if (const auto* control_map = RE::ControlMap::GetSingleton();
-            !control_map || !control_map->IsMovementControlsEnabled())
+            !control_map || !Input::ControlMapCompat::movement_controls_enabled(control_map))
         {
             return std::make_tuple(false, fast_fade);
         }

@@ -5,7 +5,7 @@ Name:
   Value: Expert Battlemage
 Description:
   TargetLanguage: English
-  Value: Spell Procs can trigger Adept and Expert spells. Reduces Cooldown by 20%. Requires 'Alteration' 50.
+  Value: Spell Procs can trigger Adept and Expert spells. Novice and Apprentice procs cost 75% less magicka instead of 50%. Reduces Cooldown by 20%. Requires 'Alteration' 50.
 Conditions:
 - MutagenObjectType: ConditionFloat
   CompareOperator: GreaterThanOrEqualTo

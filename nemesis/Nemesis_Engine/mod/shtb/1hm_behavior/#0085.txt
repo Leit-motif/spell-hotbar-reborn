@@ -580,6 +580,7 @@
 <!-- MOD_CODE ~shtb~ OPEN -->
 				<hkcstring>MSCO_attackspeed</hkcstring>
 				<hkcstring>SH2_ArtSelector</hkcstring>
+				<hkcstring>HKSMoveON</hkcstring>
 <!-- CLOSE -->
 			</hkparam>
 			<hkparam name="characterPropertyNames" numelements="9">

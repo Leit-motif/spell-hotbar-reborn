@@ -18,6 +18,7 @@
 						</hkobject>
 					</hkparam>
 					<hkparam name="transition">#0091</hkparam>
+					<hkparam name="condition">#4801</hkparam>
 					<hkparam name="eventId">9</hkparam>
 					<hkparam name="toStateId">13</hkparam>
 					<hkparam name="fromNestedStateId">0</hkparam>
@@ -74,6 +75,7 @@
 					<hkparam name="toStateId">0</hkparam>
 					<hkparam name="fromNestedStateId">0</hkparam>
 					<hkparam name="toNestedStateId">0</hkparam>
+					<hkparam name="priority">0</hkparam>
 					<hkparam name="flags">0</hkparam>
 				</hkobject>
 				<hkobject>

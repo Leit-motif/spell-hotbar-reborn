@@ -5,7 +5,7 @@
     "package": "Spriggit.Yaml.Skyrim",
     "version": "0.40.1"
   },
-  "note": "YAML trees were imported from the official upstream 0.0.14 ESPs. Git does not carry those binaries; this manifest is the lock that only the listed VMAD/StartGameEnabled fields changed.",
+  "note": "YAML trees were imported from the official upstream 0.0.14 ESPs. Git does not carry those binaries; this manifest is the lock that only the listed VMAD/StartGameEnabled fields changed, plus three Battle Mage perk descriptions corrected to match the DLL and pinned verbatim.",
   "plugins": [
     {
       "filename": "SpellHotbar.esp",
@@ -48,6 +48,30 @@
       "form": "000802",
       "editor_id": "SpellHotbar_BattleMerge_OpenPerkTreeEffect",
       "changes": ["vmad_removed_or_empty"]
+    },
+    {
+      "plugin": "SpellHotbar.esp",
+      "form": "000849",
+      "editor_id": "SpellHotbar_BattleMage_PerkProcConcentrationCast",
+      "changes": ["description_corrected"],
+      "description": "Casting a concentration spell for 4 seconds can trigger Novice or Apprentice spell procs. Requires a Magic Skill of at least 25.",
+      "reason": "Upstream said 6 seconds; gameloop_hook.cpp has fired at 4.0 since cb89697, and the author kept 4.0 when editing that line in eccfe8b, two days after writing 6 into the README."
+    },
+    {
+      "plugin": "SpellHotbar.esp",
+      "form": "00084A",
+      "editor_id": "SpellHotbar_BattleMage_PerkExpert",
+      "changes": ["description_corrected"],
+      "description": "Spell Procs can trigger Adept and Expert spells. Novice and Apprentice procs cost 75% less magicka instead of 50%. Reduces Cooldown by 20%. Requires 'Alteration' 50.",
+      "reason": "Adds the quarter-cost Novice and Apprentice procs SpellProc::has_matching_proc grants with this perk; upstream's text omitted them."
+    },
+    {
+      "plugin": "SpellHotbar.esp",
+      "form": "00084B",
+      "editor_id": "SpellHotbar_BattleMage_PerkMaster",
+      "changes": ["description_corrected"],
+      "description": "Spell Procs can trigger Master spells. Adept and Expert procs cost 75% less magicka instead of 50%. Reduces Cooldown by 40% in total. Requires 'Alteration' 75.",
+      "reason": "Adds the quarter-cost Adept and Expert procs SpellProc::has_matching_proc grants with this perk, and upstream's README note that 40% is the total, not additive."
     }
   ]
 }

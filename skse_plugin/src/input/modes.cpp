@@ -29,18 +29,17 @@ namespace SpellHotbar::Input {
         return 0;
     }
 
+    // Reborn supports Direct Cast only. Every writer comes through here -- the co-save, a preset,
+    // Papyrus `setInputMode`, a keybind reset -- and a save or preset made with upstream Spell
+    // Hotbar 2 can carry Equip (1) or Oblivion-Style (2), so the index is logged and ignored. The
+    // co-save and preset formats are unchanged: get_current_mode_index() now always writes 0.
     void set_input_mode(int index)
     {
         casts::CastingController::release_all_action_inputs();
-        if (index == 2) {
-            InputModeBase::current_mode = InputModeOblivion::getSingleton();
+        if (index != 0) {
+            logger::info("SH2 input: mode {} requested; Reborn supports Direct Cast only, using Direct Cast", index);
         }
-        else if (index == 1) {
-            InputModeBase::current_mode = InputModeEquip::getSingleton();
-        }
-        else {
-            InputModeBase::current_mode = InputModeCast::getSingleton();
-        }
+        InputModeBase::current_mode = InputModeCast::getSingleton();
     }
 
 	namespace {

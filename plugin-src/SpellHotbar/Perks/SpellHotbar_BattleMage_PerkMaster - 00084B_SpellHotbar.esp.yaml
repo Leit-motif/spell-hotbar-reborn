@@ -5,7 +5,7 @@ Name:
   Value: Master Battlemage
 Description:
   TargetLanguage: English
-  Value: Spell Procs can trigger Master spells. Reduces Cooldown by 40%. Requires 'Alteration' 75.
+  Value: Spell Procs can trigger Master spells. Adept and Expert procs cost 75% less magicka instead of 50%. Reduces Cooldown by 40% in total. Requires 'Alteration' 75.
 Conditions:
 - MutagenObjectType: ConditionFloat
   CompareOperator: GreaterThanOrEqualTo

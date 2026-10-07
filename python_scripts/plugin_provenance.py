@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prove the Spriggit YAML trees match the sanctioned 0.0.14 VMAD cut."""
+"""Prove the Spriggit YAML trees match the sanctioned 0.0.14 VMAD cut and description fixes."""
 
 from __future__ import annotations
 
@@ -21,6 +21,9 @@ LIVE_VMAD_RE = re.compile(
     re.MULTILINE,
 )
 START_GAME_ENABLED_RE = re.compile(r"^[ \t]*- StartGameEnabled\s*$", re.MULTILINE)
+DESCRIPTION_RE = re.compile(
+    r"^Description:\s*\n[ \t]+TargetLanguage:.*\n[ \t]+Value:[ \t]*(.*?)[ \t]*$", re.MULTILINE
+)
 
 
 def load_manifest() -> dict:
@@ -78,8 +81,12 @@ def verify_provenance(root: Path = ROOT) -> None:
         (item["plugin"], item["form"].upper()): item
         for item in manifest["allowed_record_changes"]
     }
-    if len(allowed) != 5:
+    vmad_removals = sum("vmad_removed_or_empty" in item["changes"] for item in allowed.values())
+    if vmad_removals != 5:
         raise RuntimeError("provenance must list exactly five sanctioned VMAD removals")
+    description_fixes = sum("description_corrected" in item["changes"] for item in allowed.values())
+    if description_fixes != 3:
+        raise RuntimeError("provenance must list exactly three sanctioned description corrections")
 
     for plugin in manifest["plugins"]:
         source = root / plugin["source"]
@@ -110,6 +117,10 @@ def verify_provenance(root: Path = ROOT) -> None:
                     record["text"]
                 ):
                     raise RuntimeError(f"{key} still has StartGameEnabled")
+                if "description_corrected" in sanctioned["changes"]:
+                    description = DESCRIPTION_RE.search(record["text"])
+                    if description is None or description.group(1) != sanctioned["description"]:
+                        raise RuntimeError(f"{key} description does not match the pinned text")
             else:
                 if has_live_vmad(record["text"]):
                     raise RuntimeError(f"{record['path']} has an unsanctioned live VMAD")

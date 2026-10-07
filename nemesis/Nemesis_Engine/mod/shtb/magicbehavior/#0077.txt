@@ -193,6 +193,9 @@
 				<hkcstring>bVoiceReady</hkcstring>
 <!-- MOD_CODE ~shtb~ OPEN -->
 				<hkcstring>bAllowRotation</hkcstring>
+				<hkcstring>HKSMoveON</hkcstring>
+				<hkcstring>MSCO_attackspeed</hkcstring>
+				<hkcstring>bAnimationDriven</hkcstring>
 <!-- CLOSE -->
 			</hkparam>
 			<hkparam name="characterPropertyNames" numelements="7">

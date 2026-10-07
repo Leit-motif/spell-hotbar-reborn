@@ -20,11 +20,12 @@ namespace SpellHotbar::casts {
 
 	float get_proc_cd(RE::PlayerCharacter* pc) {
 		float cd = GameData::global_spellhotbar_perks_proc_cooldown ? GameData::global_spellhotbar_perks_proc_cooldown->value : 10.0f;
+		// Expert 20% off, Master 40% in total (not additive), as the perk records say.
 		if (GameData::spellhotbar_perk_master && pc->HasPerk(GameData::spellhotbar_perk_master)) {
-			cd *= 0.8f;
+			cd *= 0.6f;
 		}
 		else if (GameData::spellhotbar_perk_expert && pc->HasPerk(GameData::spellhotbar_perk_expert)) {
-			cd *= 0.6f;
+			cd *= 0.8f;
 		}
 
 		return cd;

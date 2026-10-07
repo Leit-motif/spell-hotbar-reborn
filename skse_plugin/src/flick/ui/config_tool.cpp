@@ -52,7 +52,6 @@ namespace SpellHotbar::FlickUi::ConfigTool {
             sizeof(k_keybind_labels) / sizeof(k_keybind_labels[0]) == Input::keybind_id::num_keys,
             "keybind labels must cover IDs 0..22");
 
-        constexpr const char* k_input_modes[] = {"Direct Cast", "Equip", "Oblivion-Style"};
         constexpr const char* k_bar_show[] = {
             "Always", "Never", "Combat", "Drawn Weapon", "Combat or Drawn", "Combat And Drawn"};
         constexpr const char* k_bar_show_transformed[] = {"Always", "Never", "Combat"};
@@ -197,20 +196,11 @@ namespace SpellHotbar::FlickUi::ConfigTool {
             for (int id = Input::keybind_id::modifier_1; id <= Input::keybind_id::show_bar_mod; ++id) {
                 draw_keybind_row(id);
             }
-
-            FUCK::SeparatorText("Oblivion Mode Bindings");
-            for (int id = Input::keybind_id::oblivion_cast; id <= Input::keybind_id::oblivion_show_bar_mod; ++id) {
-                draw_keybind_row(id);
-            }
         }
 
         void draw_settings()
         {
             FUCK::SeparatorText("Bar Configuration");
-            int mode = Input::get_current_mode_index();
-            if (combo("SpellHotbar Mode", &mode, k_input_modes, 3)) {
-                Input::set_input_mode(std::clamp(mode, 0, 2));
-            }
             checkbox("Disable Non-Modifier Bar", &Bars::disable_non_modifier_bar);
             int slots = Bars::barsize;
             if (FUCK::SliderInt("Slots per Bar", &slots, 1, static_cast<int>(max_bar_size))) {
@@ -289,29 +279,6 @@ namespace SpellHotbar::FlickUi::ConfigTool {
                 GameData::ability_damage_reduction =
                     casts::HyperArmor::sanitize_damage_reduction(GameData::ability_damage_reduction);
             }
-
-            FUCK::SeparatorText("Oblivion Mode Bar");
-            FUCK::SliderFloat("Oblivion Slot Scale", &Bars::oblivion_slot_scale, 0.01F, 5.0F, "%.2f");
-            float ob_x = from_resolution(Bars::oblivion_offset_x);
-            if (FUCK::SliderFloat("Oblivion Offset X", &ob_x, -2000.0F, 2000.0F, "%.0f")) {
-                Bars::oblivion_offset_x = to_resolution(ob_x);
-            }
-            FUCK::SliderFloat("Oblivion Slot Spacing", &Bars::oblivion_slot_spacing, 0.0F, 50.0F, "%.0f");
-            float ob_y = from_resolution(Bars::oblivion_offset_y);
-            if (FUCK::SliderFloat("Oblivion Offset Y", &ob_y, -2000.0F, 2000.0F, "%.0f")) {
-                Bars::oblivion_offset_y = to_resolution(ob_y);
-            }
-            int ob_anchor = static_cast<int>(Bars::oblivion_bar_anchor_point);
-            if (combo("Oblivion Anchor Point", &ob_anchor, k_anchors, 9)) {
-                Bars::oblivion_bar_anchor_point = Bars::anchor_point(std::clamp(ob_anchor, 0, 8));
-            }
-            checkbox("Show Power", &Bars::oblivion_bar_show_power);
-            int ob_show = static_cast<int>(Bars::oblivion_bar_show_setting);
-            if (combo("Show Oblivion Bar", &ob_show, k_bar_show, 6)) {
-                Bars::oblivion_bar_show_setting = Bars::bar_show_mode(std::clamp(ob_show, 0, 5));
-            }
-            FUCK::SliderFloat("Show Main Bar After", &Bars::oblivion_bar_held_show_time_threshold, 0.0F, 5.0F, "%.2f");
-            checkbox("Vertical Oblivion bar", &Bars::oblivion_bar_vertical);
         }
 
         void draw_bars()

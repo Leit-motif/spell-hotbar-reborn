@@ -5,7 +5,7 @@ Name:
   Value: Cast On Concentration
 Description:
   TargetLanguage: English
-  Value: Casting a concentration spell for 6 seconds can trigger Novice or Apprentice spell procs. Requires a Magic Skill of at least 25.
+  Value: Casting a concentration spell for 4 seconds can trigger Novice or Apprentice spell procs. Requires a Magic Skill of at least 25.
 Conditions:
 - MutagenObjectType: ConditionFloat
   CompareOperator: GreaterThanOrEqualTo

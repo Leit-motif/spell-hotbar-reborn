@@ -27,3 +27,9 @@ target_compile_features(mcp_contract_tests PRIVATE cxx_std_23)
 target_include_directories(mcp_contract_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../src")
 
 add_test(NAME mcp_contract_tests COMMAND mcp_contract_tests)
+
+add_executable(art_instance_cap_tests art_instance_cap_tests.cpp)
+target_compile_features(art_instance_cap_tests PRIVATE cxx_std_23)
+target_include_directories(art_instance_cap_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../src")
+
+add_test(NAME art_instance_cap_tests COMMAND art_instance_cap_tests)

@@ -1257,9 +1257,9 @@ namespace SpellHotbar::casts::CastingController {
 			// live instance refuses a new press -- but a loud refusal is the contract; what must
 			// not happen is the press waiting out its cap behind a state already known dead.
 			MscoCastDriver::poll_watchdog(player);
-			// The art's own deadline, polled here rather than from its casting instance: the
-			// eight-second check inside `CastingInstanceWeaponArt::update()` reads a cast timer
-			// that starts at zero and only counts down, so it never fires.
+			// The art's own deadline, polled here rather than only from its casting instance,
+			// which can be retired while the clip is still playing. `CastingInstanceWeaponArt`
+			// keeps a second copy of the same cap that fires only if this one did not.
 			ArtDriver::poll_deadline(player);
 			ArtDriver::poll_clip_cues(player);
 			// After the deadline, so an Ability the deadline just cancelled is already
@@ -2072,7 +2072,11 @@ namespace SpellHotbar::casts::CastingController {
 			return true;
 		}
 		if (ArtDriver::is_active()) {
-			if (m_cast_timer > 8.0f) {
+			// Timed on this instance's own deltas, not on the cast timer: an art's cast time is
+			// zero and the cast timer only counts down from it, so it never reaches a positive cap.
+			if (m_deadline.advance(static_cast<double>(delta) * 1000.0, ArtDriver::last_signal_stamp_ms())) {
+				logger::warn("SH2 art: instance cap expired {:.1f}s after the last annotation -- cancelling",
+					ArtDriver::art_deadline_ms / 1000.0);
 				ArtDriver::cancel(pc);
 				return true;
 			}

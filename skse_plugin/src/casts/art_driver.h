@@ -22,6 +22,10 @@ namespace SpellHotbar::casts::ArtDriver {
 	// is a property of the behavior state, its own bAnimationDriven modifier in the graph.
 	bool is_active();
 
+	// Gameplay-ms stamp of the live art's start or of its last latch annotation, whichever is
+	// later; 0 when nothing is running. The clock `art_deadline_passed` measures silence from.
+	[[nodiscard]] double last_signal_stamp_ms();
+
 	// Snapshotted Ability damage multiplier while the state is active. Identity is 1.0.
 	// Published before is_active() goes true (release/acquire); the Precision callback
 	// reads this, never the live ArtDefinition.

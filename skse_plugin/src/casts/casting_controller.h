@@ -5,6 +5,7 @@
 #include "../input/keybinds.h"
 #include "../bar/hotbar.h"
 #include "combo_cache.h"
+#include "art_deadline.h"
 
 namespace SpellHotbar::casts::CastingController {
 
@@ -294,6 +295,7 @@ namespace SpellHotbar::casts::CastingController {
 		virtual void on_reset() override;
 	protected:
 		uint32_t m_art_id;
+		ArtDriver::ArtInstanceCap m_deadline;
 	};
 
 	/**

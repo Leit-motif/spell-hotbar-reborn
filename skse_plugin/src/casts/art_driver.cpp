@@ -110,12 +110,12 @@ namespace SpellHotbar::casts::ArtDriver {
 	/**
 	 * `begin()` is called exactly once, with a `CastingInstanceWeaponArt` freshly installed as
 	 * `current_cast`. That instance's `update()` in casting_controller.cpp returns false for as long
-	 * as this state is active, so it stays installed and the hotbar stays refused. Its eight-second
-	 * check compares the instance's cast timer, which starts at zero for an art and only counts
-	 * down, so that check never fires. Without a bound of its own `state_active` stays true with
-	 * nothing to time it out and the input latch behind it retains every press; a camera flip
-	 * mid-art held the hotbar for 185 seconds that way. `poll_deadline` below is that bound: eight
-	 * seconds, the same figure as the cast state's own watchdog, and the same `cancel()` teardown.
+	 * as this state is active, so it stays installed and the hotbar stays refused. Without a bound
+	 * `state_active` stays true with nothing to time it out and the input latch behind it retains
+	 * every press; a camera flip mid-art held the hotbar for 185 seconds that way. `poll_deadline`
+	 * below is that bound: eight seconds, the same figure as the cast state's own watchdog, and the
+	 * same `cancel()` teardown. The instance carries a second copy of it on its own frame clock
+	 * (`ArtInstanceCap`), which fires only if this poll did not.
 	 *
 	 * That deadline runs from the last annotation, not from the start. Anchoring it to the start
 	 * makes it fire on healthy arts: Blood Flurry's graph sends its own `SH2_ArtExit` at 8.957 s,
@@ -299,6 +299,11 @@ namespace SpellHotbar::casts::ArtDriver {
 	bool is_active()
 	{
 		return state_active.load(std::memory_order_acquire);
+	}
+
+	double last_signal_stamp_ms()
+	{
+		return last_signal_ms.load(std::memory_order_relaxed);
 	}
 
 	float active_damage_mult()

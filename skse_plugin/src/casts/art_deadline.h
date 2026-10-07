@@ -5,9 +5,8 @@ namespace SpellHotbar::casts::ArtDriver {
 /**
  * The art state's own deadline, in gameplay milliseconds.
  *
- * `CastingInstanceWeaponArt::update()` carries an eight-second check of its own, but it compares
- * the instance's cast timer, which starts at zero for an art and only counts down, so it never
- * fires. Without this deadline the art's only exit is a graph event.
+ * Without this deadline the art's only exit is a graph event. `CastingInstanceWeaponArt` carries a
+ * second, independent copy of the same rule on its own frame clock; see `ArtInstanceCap` below.
  *
  * Measured: flipping to first person 200 ms into a weapon art left the state live for 185 seconds
  * and counting. The clip's hit-frame annotations live on the third-person graph, so once the
@@ -41,5 +40,36 @@ inline constexpr bool art_deadline_passed(double last_signal_ms, double now_ms)
 {
     return last_signal_ms > 0.0 && (now_ms - last_signal_ms) > art_deadline_ms;
 }
+
+/**
+ * The casting instance's own cap: `art_deadline_ms` of silence, timed on the deltas the instance
+ * is updated with rather than on `UnpausedClock`. It sits behind `poll_deadline`, which runs
+ * earlier in the same frame and normally fires first, and catches an art that is still installed
+ * if that poll is ever skipped.
+ *
+ * Silence runs from the art's start or its last latch annotation, whichever is later -- the same
+ * anchor as `art_deadline_passed`, and for the same reason: a start-anchored eight seconds cuts
+ * Blood Flurry before its own exit. An art that hears nothing from its clip is retired eight
+ * seconds after it started.
+ */
+class ArtInstanceCap
+{
+public:
+    /** One frame. `last_signal_ms` is the driver's start-or-last-annotation stamp; any change to it
+     *  restarts the silence. Returns whether the art has now gone past the cap. */
+    constexpr bool advance(double delta_ms, double last_signal_ms)
+    {
+        if (last_signal_ms != m_seen_signal_ms) {
+            m_seen_signal_ms = last_signal_ms;
+            m_silent_ms = 0.0;
+        }
+        m_silent_ms += delta_ms;
+        return m_silent_ms > art_deadline_ms;
+    }
+
+private:
+    double m_seen_signal_ms{ 0.0 };
+    double m_silent_ms{ 0.0 };
+};
 
 }  // namespace SpellHotbar::casts::ArtDriver

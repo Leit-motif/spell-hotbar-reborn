@@ -14,6 +14,7 @@ namespace SpellHotbar::events {
 	void GameLoopHook::Timinghook()
 	{
         _Timinghook();
+        const float deltaTime = *events::deltaTime;
         casts::CastingController::retry_action_releases();
         SpellHotbar::Lifecycle::try_pending_first_initialization();
         auto pc = RE::PlayerCharacter::GetSingleton();

@@ -1,18 +1,23 @@
 #pragma once
 #include "../logger/logger.h"
+#include "../runtime_hooks.h"
 
 namespace SpellHotbar::events {
 	//Credits to https://github.com/ersh1/OpenAnimationReplacer/
 
-	static float& deltaTime = *(float*)REL::VariantID(523660, 410199, 0x30C3A08).address();
+	inline float* deltaTime = nullptr;
 
 	class GameLoopHook {
 	public:
 		static void hook() {
 			logger::info("Hooking Main Loop...");
 
-			auto& trampoline = SKSE::GetTrampoline();
 			const REL::Relocation<uintptr_t> mainHook{ REL::VariantID(35565, 36564, 0x5BAB10) };
+			const REL::Relocation<uintptr_t> timerCallee{ RELOCATION_ID(76765, 21873) };
+			const auto delta = REL::VariantID(523660, 410199, 0x30C3A08).address();
+			if (!RuntimeHooks::readable(delta, sizeof(float))) RuntimeHooks::fail("deltaTime", "global is unreadable");
+			deltaTime = reinterpret_cast<float*>(delta);
+			logger::info("SH2 hook deltaTime: runtime={} globalRVA={:X}", REL::Module::get().version().string(), delta - REL::Module::get().base());
 			// NO AllocTrampoline HERE. `plugin.cpp` allocates the one buffer, once, before any
 			// hook installs. Allocating again does not extend the buffer -- it REPLACES it, and
 			// when the old buffer came from CommonLib's own fallback allocation it is freed,
@@ -25,7 +30,8 @@ namespace SpellHotbar::events {
 			// dead pointer), not save-specific.
 			//
 			// `trampoline_alloc_test` fails the build if a second call reappears anywhere.
-			_Timinghook = trampoline.write_call<5>(mainHook.address() + REL::VariantOffset(0x748, 0xC26, 0x7EE).offset(), Timinghook);
+			_Timinghook = RuntimeHooks::write_verified_call(mainHook.address() + RuntimeHooks::main_loop_offset(),
+				timerCallee.address(), Timinghook, "MainLoop::Timer");
 
 			logger::info("...done");
 		}

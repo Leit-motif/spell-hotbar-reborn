@@ -472,6 +472,7 @@
 				<hkcstring>SH2_ArtStart</hkcstring>
 				<hkcstring>SH2_ArtExit</hkcstring>
 				<hkcstring>SH2_CastChannel</hkcstring>
+				<hkcstring>SH2_CastCut</hkcstring>
 <!-- CLOSE -->
 			</hkparam>
 			<hkparam name="attributeNames" numelements="0"></hkparam>

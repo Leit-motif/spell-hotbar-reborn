@@ -30,11 +30,11 @@ namespace SpellHotbar::casts::HyperArmor {
 				}
 				auto* ep = static_cast<RE::BGSEntryPointPerkEntry*>(entry);
 				if (ep->entryData.entryPoint != entry_point ||
-					ep->entryData.function != RE::BGSEntryPointPerkEntry::EntryData::Function::kMultiplyValue) {
+					ep->entryData.function != RE::BGSEntryPointFunction::ENTRY_POINT_FUNCTION::kMultiplyValue) {
 					continue;
 				}
 				auto* data = ep->functionData;
-				if (data != nullptr && data->GetType() == RE::BGSEntryPointFunctionData::FunctionType::kOneValue) {
+				if (data != nullptr && data->GetType() == RE::BGSEntryPointFunctionData::ENTRY_POINT_FUNCTION_DATA::kOneValue) {
 					return &static_cast<RE::BGSEntryPointFunctionDataOneValue*>(data)->data;
 				}
 			}

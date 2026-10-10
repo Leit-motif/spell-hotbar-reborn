@@ -8,6 +8,6 @@
 // and FLICK both see every frame's events in either load order.
 namespace SpellHotbar::Input {
     // Install the dispatch hook. Needs the SKSE trampoline allocated (plugin.cpp does that once,
-    // before every hook install). Call once, from SKSEPluginLoad.
+    // before every hook install). Call once at kPostLoad, after FLICK's install.
     void install_hook();
 }

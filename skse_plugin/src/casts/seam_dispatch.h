@@ -73,8 +73,20 @@ void note_attack_forwarded(RE::PlayerCharacter* a_player, AttackSeamKind a_kind,
 void note_cast_exit_landed();
 void poll_deferred_attack(RE::PlayerCharacter* a_player);
 
+/*
+ * The same wait for a cut that ran before its attack reached the seam. An SH2 Action cuts the
+ * cast when it queues its key; the attack that key produces arrives here a frame later, finds
+ * nothing to cut, and would forward into the exit's transition. Every cut that returns
+ * `cut_exit_pending` calls this, and the next new attack to reach the seam inside
+ * `kDeferredAttackCapMs` is held like the seam's own. The ready triple clears it.
+ */
+void note_attack_cut_pending();
+
 // Drop any attack still waiting. A save load or a session reset invalidates the swing it was
 // going to start; sending it late would swing on a character who has just arrived.
 void clear_deferred_attack();
+
+// True while an attack is held for a cut cast's exit transition.
+bool deferred_attack_armed();
 
 }  // namespace SpellHotbar::casts

@@ -60,7 +60,7 @@ void update(RE::PlayerCharacter *pc, float dt, bool ability_live) {
   const float next = step_heading(current, heading_toward(to.x - from.x, to.y - from.y),
                                   kTurnRateRadiansPerSecond * dt);
   if (next != current) {
-    pc->SetRotationZ(next);
+    pc->SetHeading(next);
   }
   if (target->GetFormID() != g_engaged_target) {
     g_engaged_target = target->GetFormID();

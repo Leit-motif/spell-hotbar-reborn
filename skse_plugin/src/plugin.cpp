@@ -1,4 +1,3 @@
-#include "input/control_map_compat.h"
 #include "flick/flick_watch.h"
 #include "flick/flick_windows.h"
 #include "flick/ui/config_tool.h"
@@ -74,7 +73,7 @@ namespace SpellHotbar {
 }
 SKSEPluginLoad(const SKSE::LoadInterface * skse)
 {
-    SKSE::Init(skse);
+    SKSE::Init(skse, false);
     SpellHotbar::SetupLogger();
     logger::trace("SpellHotbar2 logger setup!");
 
@@ -104,15 +103,13 @@ SKSEPluginLoad(const SKSE::LoadInterface * skse)
             //action editor's key capture depend on that order (input/input_hook.h).
             SpellHotbar::Input::install_hook();
         } else if (message->type == SKSE::MessagingInterface::kDataLoaded) {
-            // One line an AE player can paste: which ControlMap layout this game got, the enabled-controls
-            // mask read there, and what the header's SE slot holds (on 1.6.1130+ the priority stack size).
+            // Log the actual accessor-selected layout, never a direct header member offset.
             if (const auto* control_map = RE::ControlMap::GetSingleton()) {
-                namespace CM = SpellHotbar::Input::ControlMapCompat;
-                logger::info("SH2 input: game {} reads ControlMap runtime data at 0x{:X}: enabled controls 0x{:08X}, movement {}, text entry {}; SE slot 0x118 holds 0x{:08X}",
-                    REL::Module::get().version().string(), CM::data_offset(),
-                    CM::read<std::uint32_t>(control_map, CM::kEnabledControls), CM::movement_controls_enabled(control_map),
-                    CM::text_entry_count(control_map),
-                    *reinterpret_cast<const std::uint32_t*>(reinterpret_cast<std::uintptr_t>(control_map) + 0x118));
+                const auto& data = control_map->GetRuntimeData();
+                logger::info("SH2 input: game {} reads ControlMap runtime data at 0x{:X}: enabled controls 0x{:08X}, movement {}, text entry {}",
+                    REL::Module::get().version().string(),
+                    reinterpret_cast<std::uintptr_t>(&data) - reinterpret_cast<std::uintptr_t>(control_map),
+                    data.enabledControls.underlying(), control_map->IsMovementControlsEnabled(), data.textEntryCount);
             }
             SpellHotbar::RenderManager::load_fixed_textures();
             SpellHotbar::GameData::onDataLoad();

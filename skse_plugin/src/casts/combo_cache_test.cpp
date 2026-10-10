@@ -77,6 +77,8 @@ using SpellHotbar::casts::exit_without_spellfire_is_a_dropped_press;
 using SpellHotbar::casts::spellfire_advances_cast_index;
 using SpellHotbar::casts::spellfire_opens_combo_window;
 using SpellHotbar::casts::deferred_attack_should_send;
+using SpellHotbar::casts::seam_holds_for_earlier_cut;
+using SpellHotbar::casts::ready_edge_consumes_restore;
 using SpellHotbar::casts::is_cast_exit_landed_event;
 using SpellHotbar::casts::is_mco_swing_window_close_event;
 using SpellHotbar::casts::is_mco_swing_window_open_event;
@@ -772,6 +774,24 @@ void the_cancel_window_is_named_by_the_events_bfco_actually_raises()
 		"the swing's end closes the SWING, and does not travel this branch");
 }
 
+void a_held_attack_keeps_the_restore_past_the_ready_reset()
+{
+	expect(ready_edge_consumes_restore(false),
+		"with nothing held, the ready edge is the last stomp and consumes the restore");
+	expect(!ready_edge_consumes_restore(true),
+		"a held attack is sent AFTER the ready reset, so the restore must survive to its send");
+
+	// The measured trace: restore armed at 3, ready edge, ready payload writes 1, held send.
+	RollingMcoCombo rolling;
+	rolling.record(McoCombo{ 3, 3 }, 0.0);
+	expect(rolling.arm(10.0).has_value(), "a fresh sample arms");
+	if (ready_edge_consumes_restore(true)) {
+		(void)rolling.consume();
+	}
+	expect(rolling.restore_pending(), "the ready reset that follows still finds a restore to undo");
+	expect(rolling.peek() && rolling.peek()->nextAttack == 3, "and undoes it back to attack 3");
+}
+
 void a_cut_attack_waits_for_the_exit_transition_to_land()
 {
 	const double cut_at = 1000.0;
@@ -788,6 +808,21 @@ void a_cut_attack_waits_for_the_exit_transition_to_land()
 	expect(!deferred_attack_should_send(true, false, cut_at + kDeferredAttackCapMs - 1.0, cut_at,
 			   kDeferredAttackCapMs),
 		"one millisecond short of the cap it is still waiting");
+}
+
+void an_attack_after_an_earlier_cut_is_held_until_the_cap()
+{
+	const double cut_at = 1000.0;
+
+	expect(seam_holds_for_earlier_cut(false, true, cut_at + 3.0, cut_at, kDeferredAttackCapMs),
+		"an Action's attack reaching the seam 3 ms after its cut is held for the ready triple");
+	expect(!seam_holds_for_earlier_cut(true, true, cut_at + 14.0, cut_at, kDeferredAttackCapMs),
+		"the held attack's own re-send forwards");
+	expect(!seam_holds_for_earlier_cut(false, false, cut_at + 3.0, cut_at, kDeferredAttackCapMs),
+		"no cut waiting, or the ready triple already landed: the attack forwards at once");
+	expect(!seam_holds_for_earlier_cut(false, true, cut_at + kDeferredAttackCapMs, cut_at,
+			   kDeferredAttackCapMs),
+		"a marker no ready tag ever cleared lapses on the cap and cannot hold a later press");
 }
 
 void the_ready_triple_is_what_says_the_exit_landed()
@@ -1482,7 +1517,9 @@ int main()
 	a_press_is_released_when_the_swings_cancel_window_opens();
 	the_swing_tracker_carries_its_own_cancel_window();
 	the_cancel_window_is_named_by_the_events_bfco_actually_raises();
+	a_held_attack_keeps_the_restore_past_the_ready_reset();
 	a_cut_attack_waits_for_the_exit_transition_to_land();
+	an_attack_after_an_earlier_cut_is_held_until_the_cap();
 	the_ready_triple_is_what_says_the_exit_landed();
 	the_seam_opens_a_swing_for_attacks_only();
 	a_retained_press_is_dropped_once_its_cap_runs_out();

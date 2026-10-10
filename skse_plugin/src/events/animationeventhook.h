@@ -2,6 +2,7 @@
 #include "../casts/casting_controller.h"
 #include "../casts/combo_cache.h"
 #include "../logger/logger.h"
+#include "../runtime_hooks.h"
 
 
 namespace SpellHotbar::events {
@@ -17,7 +18,8 @@ namespace SpellHotbar::events {
 			REL::Relocation<uintptr_t> AnimEventVtbl_PC{ RE::VTABLE_PlayerCharacter[2] };
 
 			//_ProcessEvent_NPC = AnimEventVtbl_NPC.write_vfunc(0x1, ProcessEvent_NPC);
-			_ProcessEvent_PC = AnimEventVtbl_PC.write_vfunc(0x1, ProcessEvent_PC);
+			_ProcessEvent_PC = RuntimeHooks::write_verified_vfunc(AnimEventVtbl_PC, 0x1,
+				ProcessEvent_PC, "PlayerCharacter::ProcessAnimationEvent");
 			logger::info("...animation event hook installed");
 		}
 

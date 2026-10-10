@@ -412,14 +412,15 @@ namespace SpellHotbar::casts::CastingController {
 	void cut_channel_for_attack(RE::PlayerCharacter* pc);
 
 	/**
-	 * What a cut left behind for the caller to wait on. The seam is the only caller that cares:
-	 * an exit the graph consumed has a transition still to land, and an attack forwarded into it
-	 * dies without reaching its cancel window.
+	 * What a cut left behind for the caller to wait on. An exit the graph consumed has a
+	 * transition still to land, and an attack forwarded into it dies without reaching its cancel
+	 * window. The seam holds its own attack on `cut_exit_pending`; a pending cut also leaves the
+	 * seam a marker, which holds the attack of a caller that cut before reaching it.
 	 */
 	enum class CastCut {
 		none,              // nothing cuttable was present; the caller's attack was never ours to hold
-		cut_exit_pending,  // the state ended and the graph took SH2_CastExit -- its transition is still to land
-		cut_no_exit,       // the state ended, but the graph refused the exit; nothing to wait for
+		cut_exit_pending,  // the state ended and the graph took SH2_CastCut or SH2_CastExit -- the return to ready is still to land
+		cut_no_exit,       // the state ended, but the graph refused both; nothing to wait for
 	};
 
 	/**

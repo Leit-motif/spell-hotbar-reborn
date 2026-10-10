@@ -5,6 +5,7 @@
 #include "msco_cast_driver.h"
 #include "combo_cache.h"
 #include "../logger/logger.h"
+#include "../runtime_hooks.h"
 #include "../game_data/game_data.h"
 #include "../game_data/custom_ability_runtime.h"
 
@@ -305,15 +306,16 @@ namespace SpellHotbar::casts::ClipTranslationDriver {
 	void install()
 	{
 		REL::Relocation<std::uintptr_t> vtbl{ RE::VTABLE_hkbClipGenerator[0] };
-		_Activate = vtbl.write_vfunc(0x4, Activate);
-		_Deactivate = vtbl.write_vfunc(0x7, Deactivate);
+		_Activate = RuntimeHooks::write_verified_vfunc(vtbl, 0x4, Activate, "hkbClipGenerator::Activate");
+		_Deactivate = RuntimeHooks::write_verified_vfunc(vtbl, 0x7, Deactivate, "hkbClipGenerator::Deactivate");
 		logger::info("SH2 motion: clip translation hooks installed");
 
 		// Without a velocity hook the controller never takes the motion, and apply() falls back
 		// to placing the actor after one frame, so a missing table costs collision, not motion.
 		if (const auto proxy = character_controller_vtable(RE::VTABLE_bhkCharProxyController); proxy.address) {
 			REL::Relocation<std::uintptr_t> table{ proxy.address };
-			_SetLinearVelocityProxy = table.write_vfunc(0x7, SetLinearVelocityProxy);
+			_SetLinearVelocityProxy = RuntimeHooks::write_verified_vfunc(table, 0x7, SetLinearVelocityProxy,
+				"bhkCharProxyController::SetLinearVelocity");
 			logger::info("SH2 motion: velocity hook on bhkCharProxyController vtable [{}] (subobject +0x{:X})",
 				proxy.index, proxy.offset);
 		} else {
@@ -321,7 +323,8 @@ namespace SpellHotbar::casts::ClipTranslationDriver {
 		}
 		if (const auto rigid = character_controller_vtable(RE::VTABLE_bhkCharRigidBodyController); rigid.address) {
 			REL::Relocation<std::uintptr_t> table{ rigid.address };
-			_SetLinearVelocityRigid = table.write_vfunc(0x7, SetLinearVelocityRigid);
+			_SetLinearVelocityRigid = RuntimeHooks::write_verified_vfunc(table, 0x7, SetLinearVelocityRigid,
+				"bhkCharRigidBodyController::SetLinearVelocity");
 			logger::info("SH2 motion: velocity hook on bhkCharRigidBodyController vtable [{}] (subobject +0x{:X})",
 				rigid.index, rigid.offset);
 		} else {

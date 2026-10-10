@@ -4,7 +4,6 @@
 #include <utility>
 #include <unordered_map>
 #include "input_event_adapter.h"
-#include "control_map_compat.h"
 #include "keybinds.h"
 #include "../flick/flick_watch.h"
 #include "../logger/logger.h"
@@ -830,7 +829,7 @@ namespace SpellHotbar::Input {
         queue->AddButtonEvent(*device, static_cast<std::int32_t>(event_code), value,
             held_duration);
         if (queue->buttonEventCount > queued_button_events) {
-            queue->buttonEvents[queued_button_events].userEvent = native_user_event;
+            queue->GetRuntimeData().buttonEvents[queued_button_events].userEvent = native_user_event;
         }
         const char* phase = value <= 0.0f ? "up" : held_duration > 0.0f ? "held" : "down";
         if (value > 0.0f && held_duration > 0.0f) {
@@ -897,7 +896,7 @@ namespace SpellHotbar::Input {
         }
 
         const auto* control_map = RE::ControlMap::GetSingleton();
-        if (!control_map || !ControlMapCompat::movement_controls_enabled(control_map))
+        if (!control_map || !control_map->IsMovementControlsEnabled())
         {
             return false;
         }
@@ -1050,7 +1049,7 @@ namespace SpellHotbar::Input {
             return false;
         }
         const auto* control_map = RE::ControlMap::GetSingleton();
-        if (control_map && (ControlMapCompat::text_entry_count(control_map) > 0))
+        if (control_map && (control_map->GetRuntimeData().textEntryCount > 0))
         {
             return false;
         }

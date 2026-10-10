@@ -57,8 +57,45 @@ namespace SpellHotbar::casts {
 			double armed_at_ms = 0.0;
 		};
 
+		// A cut that ran before its attack reached the seam (an Action's, the input hook's), still waiting for the
+		// ready triple. Under the same mutex as the held attack it turns into.
+		struct EarlierCut {
+			bool waiting = false;
+			double cut_at_ms = 0.0;
+		};
+
 		std::mutex g_deferred_mutex;
 		DeferredAttack g_deferred;
+		EarlierCut g_earlier_cut;
+
+		// Caller holds g_deferred_mutex. `armed_at` is the cut's time, not the hold's, so the cap
+		// bounds the whole wait from the cut on both paths.
+		void hold_attack_locked(std::string_view a_name, double a_armed_at_ms)
+		{
+			// Through a std::string: a string_view carries no guarantee of a terminator, and this
+			// one is about to become a BSFixedString.
+			const std::string owned{ a_name };
+			g_deferred = DeferredAttack{ RE::BSFixedString(owned.c_str()), true, false, a_armed_at_ms };
+		}
+
+		// Hold this attack on the marker an earlier cut left, if one stands. Otherwise the marker is
+		// spent: landed, lapsed, or never set, the first new attack to get here ends it.
+		bool hold_for_earlier_cut(std::string_view a_name, const char* a_source)
+		{
+			const std::lock_guard lock{ g_deferred_mutex };
+			if (seam_holds_for_earlier_cut(t_in_deferred_resend, g_earlier_cut.waiting,
+					UnpausedClock::now_ms(), g_earlier_cut.cut_at_ms, kDeferredAttackCapMs)) {
+				hold_attack_locked(a_name, g_earlier_cut.cut_at_ms);
+				g_earlier_cut = EarlierCut{};
+				logger::info("SH2 seam: holding \"{}\" for an earlier cut's transition (source={})",
+					a_name, a_source);
+				return true;
+			}
+			if (!t_in_deferred_resend) {
+				g_earlier_cut = EarlierCut{};
+			}
+			return false;
+		}
 
 	}
 
@@ -76,6 +113,14 @@ namespace SpellHotbar::casts {
 		}
 
 		const SeamCutGuard guard;
+
+		// A caller (an Action, the input hook) already cut the cast for THIS attack, a frame before
+		// its event got here.
+		// Hold it for the ready triple the same as the cut below would. Ahead of the teardown-pass
+		// clear: that pass is this cut's own, armed for the stop still on its way.
+		if (hold_for_earlier_cut(a_name, a_source)) {
+			return SeamDisposition::capture;
+		}
 
 		// A new attack has reached the seam, so any teardown pass still armed belongs to an
 		// earlier cut whose stop never arrived. Spend it here, before the cut below arms a fresh
@@ -106,17 +151,27 @@ namespace SpellHotbar::casts {
 		if (CastingController::is_committed_cast_holding_graph() ||
 			CastingController::is_cuttable_follow_through()) {
 			const auto cut = CastingController::cut_committed_cast_for_attack(a_player);
+			if (cut == CastingController::CastCut::none) {
+				// Another thread's cut (an Action's, measured in the same millisecond) ended the
+				// state while this one waited its turn, and left the marker this one checked too
+				// early above. Ask again now that it stands.
+				if (hold_for_earlier_cut(a_name, a_source)) {
+					return SeamDisposition::capture;
+				}
+				return SeamDisposition::forward;
+			}
 			logger::info("SH2 seam: cut committed cast for \"{}\" (source={})", a_name, a_source);
 			// A consumed exit has a transition still to land, and an attack forwarded into it
 			// dies. Hold the attack here and send it from the frame poll once the graph says the
 			// transition is done. A refused exit has nothing to wait for and forwards at once.
 			if (cut == CastingController::CastCut::cut_exit_pending) {
 				const std::lock_guard lock{ g_deferred_mutex };
-				// Through a std::string: a string_view carries no guarantee of a terminator, and
-				// this one is about to become a BSFixedString.
-				const std::string owned{ a_name };
-				g_deferred = DeferredAttack{ RE::BSFixedString(owned.c_str()), true, false,
-					UnpausedClock::now_ms() };
+				hold_attack_locked(a_name, UnpausedClock::now_ms());
+				// This hold spends the marker the cut just left, as the marker's own hold does.
+				// Left standing, it held BFCO's follow-up idle (`BFCOAttackstart_1`, sent a moment
+				// after the power attack it belongs to) in the same slot, which replaced the power
+				// attack: measured live, that rep re-sent only the follow-up and swung nothing.
+				g_earlier_cut = EarlierCut{};
 				logger::info("SH2 seam: holding \"{}\" for the cast exit's transition", a_name);
 				return SeamDisposition::capture;
 			}
@@ -162,12 +217,20 @@ namespace SpellHotbar::casts {
 		MscoCastDriver::observe_attack_sent(a_player, a_kind);
 	}
 
+	void note_attack_cut_pending()
+	{
+		const std::lock_guard lock{ g_deferred_mutex };
+		g_earlier_cut = EarlierCut{ true, UnpausedClock::now_ms() };
+	}
+
 	void note_cast_exit_landed()
 	{
 		const std::lock_guard lock{ g_deferred_mutex };
 		if (g_deferred.armed) {
 			g_deferred.exit_landed = true;
 		}
+		// Landed before the attack arrived: nothing to wait for, so that attack forwards at once.
+		g_earlier_cut = EarlierCut{};
 	}
 
 	void poll_deferred_attack(RE::PlayerCharacter* a_player)
@@ -202,10 +265,17 @@ namespace SpellHotbar::casts {
 		a_player->NotifyAnimationGraph(name);
 	}
 
+	bool deferred_attack_armed()
+	{
+		const std::lock_guard lock{ g_deferred_mutex };
+		return g_deferred.armed;
+	}
+
 	void clear_deferred_attack()
 	{
 		const std::lock_guard lock{ g_deferred_mutex };
 		g_deferred = DeferredAttack{};
+		g_earlier_cut = EarlierCut{};
 	}
 
 }  // namespace SpellHotbar::casts

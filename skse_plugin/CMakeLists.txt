@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(SpellHotbar2 VERSION 0.9.5 LANGUAGES CXX)
+project(SpellHotbar2 VERSION 0.9.6 LANGUAGES CXX)
 
 include(CTest)
 
@@ -93,6 +93,7 @@ if(NOT TDM_API_SHA256 STREQUAL TDM_API_ADAPTED_SHA256 OR
 endif()
 
 
+find_package(directxtk CONFIG REQUIRED)
 find_package(CommonLibSSE CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(RapidJSON CONFIG REQUIRED)

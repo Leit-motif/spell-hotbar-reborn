@@ -2,6 +2,7 @@
 
 #include "input.h"
 #include "../logger/logger.h"
+#include "../runtime_hooks.h"
 
 namespace SpellHotbar::Input {
     namespace {
@@ -40,10 +41,11 @@ namespace SpellHotbar::Input {
 
     void install_hook()
     {
-        auto& trampoline = SKSE::GetTrampoline();
         const REL::Relocation<std::uintptr_t> caller{ RELOCATION_ID(67315, 68617) };
-        DispatchInputEventHook::func = trampoline.write_call<5>(
-            caller.address() + REL::VariantOffset(0x7B, 0x7B, 0).offset(), DispatchInputEventHook::thunk);
+        const REL::Relocation<std::uintptr_t> callee{ RELOCATION_ID(67355, 68655) };
+        DispatchInputEventHook::func = RuntimeHooks::write_verified_call(
+            caller.address() + 0x7B, callee.address(), DispatchInputEventHook::thunk,
+            "Input::Dispatch");
         logger::info("SH2 input: hooked the input dispatch site (67315+0x7B)");
     }
 }

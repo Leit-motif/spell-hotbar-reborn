@@ -6,6 +6,7 @@
 #include "../casts/hyper_armor_sync.h"
 #include "../casts/seam_dispatch.h"
 #include "../logger/logger.h"
+#include "../runtime_hooks.h"
 
 namespace SpellHotbar::events {
 
@@ -58,7 +59,8 @@ namespace SpellHotbar::events {
 	{
 		logger::info("Installing attack seam hook...");
 		REL::Relocation<uintptr_t> NotifyVtbl_PC{ RE::VTABLE_PlayerCharacter[3] };
-		_NotifyAnimationGraph_PC = NotifyVtbl_PC.write_vfunc(0x1, NotifyAnimationGraph_PC);
+		_NotifyAnimationGraph_PC = RuntimeHooks::write_verified_vfunc(NotifyVtbl_PC, 0x1,
+			NotifyAnimationGraph_PC, "PlayerCharacter::NotifyAnimationGraph");
 		logger::info("...attack seam hook installed");
 	}
 

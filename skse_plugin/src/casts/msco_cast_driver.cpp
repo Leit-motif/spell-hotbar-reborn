@@ -680,7 +680,10 @@ namespace SpellHotbar::casts::MscoCastDriver {
 		}
 
 		if (is_restore_edge(tag)) {
-			if (const auto combo = g_rolling.consume()) {
+			const auto combo = ready_edge_consumes_restore(deferred_attack_armed())
+				? g_rolling.consume()
+				: g_rolling.peek();
+			if (combo) {
 				write_mco(a_player, *combo);
 			}
 		}
@@ -798,6 +801,21 @@ namespace SpellHotbar::casts::MscoCastDriver {
 	void arm_combo_restore()
 	{
 		arm_restore();
+	}
+
+	bool notify_attack_cut(RE::PlayerCharacter* pc)
+	{
+		if (!pc || voice_path.load(std::memory_order_relaxed)) {
+			return false;
+		}
+		// Ahead of SH2_CastExit, never instead of it: the magic graph and all bookkeeping still
+		// key on the exit. In 1hm_behavior this takes the cast state to state 0 with no blend, so
+		// the exit that follows finds nothing to do there. Its 0.2 s blend was what restarted the
+		// attack clip when it completed under the swing (BFCO_PlayerAttackStart twice, ~180 ms
+		// apart). A graph generated before this event existed refuses it and blends as before.
+		const bool consumed = pc->NotifyAnimationGraph("SH2_CastCut"sv);
+		logger::debug("SH2 cast: notified SH2_CastCut -> {}", consumed);
+		return consumed;
 	}
 
 	bool cancel(RE::PlayerCharacter* pc)

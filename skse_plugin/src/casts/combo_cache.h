@@ -1144,6 +1144,32 @@ inline constexpr double kDeferredAttackCapMs = 200.0;
 	return armed && (exit_landed || (now_ms - armed_at_ms) >= cap_ms);
 }
 
+// The same hold for an attack whose cut ran BEFORE it reached the seam. An SH2 Action cuts the
+// cast when it queues its key, so the attack that key produces arrives at the seam a frame later
+// with nothing left to cut, and used to forward straight into the exit's transition. Measured
+// live: five Action power attacks sent that way stopped 204-226 ms in with no window,
+// while the one power attack the seam held played through. So the cut leaves a marker, and an
+// attack reaching the seam while it stands is held exactly as the seam's own cut holds one. The
+// re-send is exempt (it IS the held attack), the ready triple clears the marker, and it lapses
+// on the same cap so a graph that raises no ready tag cannot hold a later press.
+[[nodiscard]] constexpr bool seam_holds_for_earlier_cut(
+	bool is_resend, bool cut_waiting, double now_ms, double cut_at_ms, double cap_ms) noexcept
+{
+	return !is_resend && cut_waiting && (now_ms - cut_at_ms) < cap_ms;
+}
+
+// Who consumes a pending combo restore at the ready edge. Normally the ready edge does: it is
+// the last stomp before the next swing. But a cast cut by an attack HOLDS that attack until the
+// exit transition lands, and the ready state's own `@SGVI|MCO_nextattack|1` reset arrives after
+// the ready edge and before the held send. Consumed at the edge, nothing undoes that reset and
+// the held attack plays attack 1. So while an attack is held, the edge re-writes but keeps the
+// restore pending; the stomp-undo branches put it back, and the held attack's seam send is the
+// consume -- the same rule BFCO's graph already follows.
+[[nodiscard]] constexpr bool ready_edge_consumes_restore(bool attack_held_for_exit) noexcept
+{
+	return !attack_held_for_exit;
+}
+
 // The swing's cancel window, under BOTH annotation vocabularies.
 //
 // MCO's names alone are not enough, even though a BFCO swing can show `MCO_WinOpen` /

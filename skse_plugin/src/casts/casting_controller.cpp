@@ -1,6 +1,7 @@
 #include "casting_controller.h"
 #include <algorithm>
 #include <atomic>
+#include <mutex>
 #include <string>
 #include <vector>
 #include "../logger/logger.h"
@@ -349,12 +350,28 @@ namespace SpellHotbar::casts::CastingController {
 	{
 		if (auto* channel = live_channel()) {
 			logger::debug("SH2 cast: attack pressed on a streaming channel; ending the channel");
+			MscoCastDriver::notify_attack_cut(pc);
 			channel->end_channel(pc);
 		}
 	}
 
 	CastCut cut_committed_cast_for_attack(RE::PlayerCharacter* pc)
 	{
+		// One cut at a time. An Action cuts on the thread that fired it while the key it queued
+		// reaches the seam on the input thread, and measured live through castSlot the two
+		// ran in the same millisecond: both read the cast as committed, the second got
+		// SH2_CastCut refused, reported no exit, and forwarded the power attack straight into the
+		// transition. Serialized, the second caller finds nothing left to cut and returns `none`,
+		// and the seam then holds its attack on the marker the first one left. Recursive because
+		// the sends below re-enter the graph hook on this thread. Timed because the seam waits
+		// here from inside that hook, under whatever its caller holds: past 50 ms (a cut takes
+		// about 1) it gives up and cuts unserialized, today's behaviour, rather than risk a
+		// deadlock against a lock the other cut's sends need.
+		static std::recursive_timed_mutex cut_mutex;
+		std::unique_lock lock{ cut_mutex, std::defer_lock };
+		if (!lock.try_lock_for(std::chrono::milliseconds(50))) {
+			logger::warn("SH2 cast: cut lock not taken in 50 ms; cutting unserialized");
+		}
 		if (!is_committed_cast_holding_graph() && !is_cuttable_follow_through()) {
 			return CastCut::none;
 		}
@@ -364,7 +381,17 @@ namespace SpellHotbar::casts::CastingController {
 		// about 10 ms later. Arm the pass BEFORE the send so that stop is absorbed rather than
 		// closing the swing the seam is about to open.
 		MscoCastDriver::arm_teardown_stop();
-		return MscoCastDriver::cancel(pc) ? CastCut::cut_exit_pending : CastCut::cut_no_exit;
+		// Both sends always run: the exit carries the magic graph and the bookkeeping. Either one
+		// taken means the graph is on its way back to magic-ready and an attack must wait for it.
+		const bool cut_taken = MscoCastDriver::notify_attack_cut(pc);
+		const bool exit_taken = MscoCastDriver::cancel(pc);
+		if (!cut_taken && !exit_taken) {
+			return CastCut::cut_no_exit;
+		}
+		// The Action and input-hook callers cut before their attack reaches the seam, which then
+		// finds nothing to cut. This marker is how it still holds that attack.
+		note_attack_cut_pending();
+		return CastCut::cut_exit_pending;
 	}
 
 	bool our_latch_is_closed()
@@ -661,7 +688,7 @@ namespace SpellHotbar::casts::CastingController {
 
 		auto am = RE::BSAudioManager::GetSingleton();
 		if (am) {
-			am->BuildSoundDataFromDescriptor(handle, a_descriptor, 16); // 16 used by https://github.com/D7ry/EldenParry
+			am->GetSoundHandle(handle, a_descriptor, 16); // 16 used by https://github.com/D7ry/EldenParry
 			if (handle.SetPosition(a->data.location)) {
 				handle.SetObjectToFollow(a->Get3D());
 				handle.Play();
@@ -928,7 +955,7 @@ namespace SpellHotbar::casts::CastingController {
 				casts::SpellProc::consume_proc();
 			}
 			apply_cooldown();
-			pc->AsActorValueOwner()->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kMagicka, -m_manacost);
+			pc->AsActorValueOwner()->ModActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kMagicka, -m_manacost);
 			consume_items();
 		}
 		set_casted();
@@ -1584,14 +1611,14 @@ namespace SpellHotbar::casts::CastingController {
 					bool spell_allowed{true};
 					if (form->GetFormType() == RE::FormType::Spell && !pc->HasSpell(spell)) {
 						spell_allowed = false;
-						RE::DebugNotification("Spell is no longer known!");
+						RE::SendHUDMessage::ShowHUDMessage("Spell is no longer known!");
 					}
 					else if (form->GetFormType() == RE::FormType::Spell && !GameData::can_cast_spell_mod_compat(spell)) {
 						spell_allowed = false;
 					}
 					else if (form->GetFormType() == RE::FormType::Scroll && GameData::count_item_in_inv(form->GetFormID()) <= 0) {
 						spell_allowed = false;
-						RE::DebugNotification("No more scrolls left!");
+						RE::SendHUDMessage::ShowHUDMessage("No more scrolls left!");
 					}
 					
 					if (spell_allowed) {
@@ -1696,7 +1723,7 @@ namespace SpellHotbar::casts::CastingController {
 				}
 				else
 				{
-					RE::DebugNotification("No more potions left!");
+					RE::SendHUDMessage::ShowHUDMessage("No more potions left!");
 					return false;
 				}
 			}
@@ -2212,15 +2239,15 @@ namespace SpellHotbar::casts::CastingController {
 		const bool charged_magicka = action->magicka_cost > 0.0f && av;
 		const bool charged_health = action->health_cost > 0.0f && av;
 		if (charged_stamina) {
-			av->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kStamina,
+			av->ModActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kStamina,
 				-action->stamina_cost);
 		}
 		if (charged_magicka) {
-			av->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kMagicka,
+			av->ModActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kMagicka,
 				-action->magicka_cost);
 		}
 		if (charged_health) {
-			av->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth,
+			av->ModActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth,
 				-action->health_cost);
 		}
 		const bool cooldown_started = action->cooldown_days > 0.0f;
@@ -2245,15 +2272,15 @@ namespace SpellHotbar::casts::CastingController {
 				GameData::clear_action_cooldown(action_id);
 			}
 			if (charged_health) {
-				av->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth,
+				av->ModActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth,
 					action->health_cost);
 			}
 			if (charged_magicka) {
-				av->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kMagicka,
+				av->ModActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kMagicka,
 					action->magicka_cost);
 			}
 			if (charged_stamina) {
-				av->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kStamina,
+				av->ModActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kStamina,
 					action->stamina_cost);
 			}
 		};
@@ -2330,6 +2357,8 @@ namespace SpellHotbar::casts::CastingController {
 		// injected press produces a frame later. That is harmless rather than a double cut:
 		// `cut_committed_cast_for_attack` re-checks the cuttable span and returns false without
 		// touching anything once the cut here has already ended the state.
+		// The cut also leaves the seam its marker, so that later event is held for the ready
+		// triple rather than forwarded into the exit's transition.
 		if (!action->is_costed() && committed_cuttable) {
 			cut_committed_cast_for_attack(pc);
 		}
@@ -2452,13 +2481,13 @@ namespace SpellHotbar::casts::CastingController {
 			return CastIntent::offer(slot, keybind);
 		}
 		if (art->stamina_cost > 0.0f && av) {
-			av->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kStamina, -art->stamina_cost);
+			av->ModActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kStamina, -art->stamina_cost);
 		}
 		if (art->magicka_cost > 0.0f && av) {
-			av->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kMagicka, -art->magicka_cost);
+			av->ModActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kMagicka, -art->magicka_cost);
 		}
 		if (art->health_cost > 0.0f && av) {
-			av->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth, -art->health_cost);
+			av->ModActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth, -art->health_cost);
 		}
 		if (art->cooldown_days > 0.0f) {
 			GameData::add_art_cooldown(art_id, art->cooldown_days);

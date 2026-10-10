@@ -190,6 +190,17 @@ namespace SpellHotbar::casts::MscoCastDriver {
 	bool cancel(RE::PlayerCharacter* pc);
 
 	/**
+	 * An attack is ending the cast: send `SH2_CastCut`, whose 1hm transition is instant, before
+	 * the caller's `SH2_CastExit`. The exit's default 0.2 s blend, completing under a swing that
+	 * had already started, restarted the attack clip.
+	 *
+	 * Returns whether the graph took it. A taken cut leaves the state before the exit arrives, so
+	 * the exit is then refused, yet the graph still has its return to magic-ready to land: the
+	 * caller must treat a taken cut as a pending exit and hold the attack for it.
+	 */
+	bool notify_attack_cut(RE::PlayerCharacter* pc);
+
+	/**
 	 * Time out a cast state the graph never left. Called once per frame from update_cast.
 	 *
 	 * The state's only ordinary end is the graph raising SH2_CastExit, and the graph is free to

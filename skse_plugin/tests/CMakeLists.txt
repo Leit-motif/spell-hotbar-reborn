@@ -33,3 +33,16 @@ target_compile_features(art_instance_cap_tests PRIVATE cxx_std_23)
 target_include_directories(art_instance_cap_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../src")
 
 add_test(NAME art_instance_cap_tests COMMAND art_instance_cap_tests)
+
+add_executable(runtime_layout_tests runtime_layout_tests.cpp)
+target_compile_features(runtime_layout_tests PRIVATE cxx_std_23)
+target_compile_definitions(runtime_layout_tests PRIVATE ENABLE_COMMONLIBSSE_TESTING=1)
+target_include_directories(runtime_layout_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../src")
+target_link_libraries(runtime_layout_tests PRIVATE CommonLibSSE::CommonLibSSE)
+add_test(NAME runtime_layout_tests COMMAND runtime_layout_tests)
+
+add_executable(runtime_hook_tests runtime_hook_tests.cpp)
+target_compile_features(runtime_hook_tests PRIVATE cxx_std_23)
+target_include_directories(runtime_hook_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../src")
+target_link_libraries(runtime_hook_tests PRIVATE CommonLibSSE::CommonLibSSE)
+add_test(NAME runtime_hook_tests COMMAND runtime_hook_tests)

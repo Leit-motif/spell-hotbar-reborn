@@ -774,12 +774,46 @@ void the_cancel_window_is_named_by_the_events_bfco_actually_raises()
 		"the swing's end closes the SWING, and does not travel this branch");
 }
 
-void a_held_attack_keeps_the_restore_past_the_ready_reset()
+void a_restore_survives_the_ready_edge_until_an_attack_or_expiry()
 {
-	expect(ready_edge_consumes_restore(false),
-		"with nothing held, the ready edge is the last stomp and consumes the restore");
+	// The live trace: a1, a2, spell, shout. The shout's press cut the spell and armed attack 3;
+	// the ready edge and the ready reset landed in the same millisecond, the shout began 1.7 s
+	// later, and the attack after it played attack 1.
+	expect(!ready_edge_consumes_restore(false),
+		"with nothing held, a shout can still come between the ready edge and the next swing");
 	expect(!ready_edge_consumes_restore(true),
 		"a held attack is sent AFTER the ready reset, so the restore must survive to its send");
+
+	RollingMcoCombo rolling;
+	rolling.record(McoCombo{ 3, 3 }, 0.0);
+	expect(rolling.arm(1000.0).has_value(), "the cut arms attack 3");
+	expect(!rolling.expire_pending(2700.0), "1.7 s later, at the shout, it is still pending");
+	expect(rolling.peek() && rolling.peek()->nextAttack == 3,
+		"so the ready reset the shout samples behind is undone back to attack 3");
+	rolling.credit_held_time(1100.0);
+	expect(!rolling.expire_pending(1000.0 + RollingMcoCombo::kPendingMaxMs + 1000.0),
+		"time spent shouting does not count against the pending restore");
+	expect(rolling.expire_pending(1000.0 + RollingMcoCombo::kPendingMaxMs + 1200.0),
+		"but past the cap with no attack, it expires and MCO's own reset stands");
+	expect(!rolling.restore_pending(), "and nothing is left to put back");
+}
+
+void shouting_does_not_age_the_sample_out()
+{
+	// a2's window close sampled attack 3; a shout and then a spell outran the 5 s cap at a
+	// player's pace, and the spell's exit restored nothing.
+	RollingMcoCombo rolling;
+	rolling.record(McoCombo{ 3, 3 }, 0.0);
+	rolling.credit_held_time(2500.0);
+	expect(rolling.arm(6000.0).has_value(),
+		"6 s after the sample, with 2.5 s of it shouting, the spell still restores attack 3");
+	RollingMcoCombo uncredited;
+	uncredited.record(McoCombo{ 3, 3 }, 0.0);
+	expect(!uncredited.arm(6000.0).has_value(), "6 s of real idle time still ages it out");
+}
+
+void a_held_attack_keeps_the_restore_past_the_ready_reset()
+{
 
 	// The measured trace: restore armed at 3, ready edge, ready payload writes 1, held send.
 	RollingMcoCombo rolling;
@@ -1519,6 +1553,8 @@ int main()
 	the_cancel_window_is_named_by_the_events_bfco_actually_raises();
 	a_held_attack_keeps_the_restore_past_the_ready_reset();
 	a_cut_attack_waits_for_the_exit_transition_to_land();
+	a_restore_survives_the_ready_edge_until_an_attack_or_expiry();
+	shouting_does_not_age_the_sample_out();
 	an_attack_after_an_earlier_cut_is_held_until_the_cap();
 	the_ready_triple_is_what_says_the_exit_landed();
 	the_seam_opens_a_swing_for_attacks_only();

@@ -79,7 +79,24 @@ public:
 		}
 		restore_ = *combo;
 		pending_ = true;
+		armedAtMs_ = nowMs;
 		return restore_;
+	}
+
+	// A pending restore is spent by the attack that takes it, not by a ready edge (see
+	// `ready_edge_consumes_restore`). So it needs its own end: past kPendingMaxMs of the player
+	// being out of the chain with no attack, the stomp-undo branches stop writing it back and
+	// MCO's own reset stands. Returns true on the call that expires it.
+	static constexpr double kPendingMaxMs = 5000.0;
+
+	bool expire_pending(double nowMs)
+	{
+		std::lock_guard lock{ mutex_ };
+		if (!pending_ || nowMs - armedAtMs_ <= kPendingMaxMs) {
+			return false;
+		}
+		pending_ = false;
+		return true;
 	}
 
 	[[nodiscard]] bool restore_pending() const
@@ -112,14 +129,22 @@ public:
 	// it: a concentration channel is unbounded, so any hold past five seconds would age the
 	// sample out and the chain could never continue. Crediting the held time keeps the cap
 	// doing its real job -- refusing a combo sampled in an earlier fight -- while a hold of any
-	// length hands its position on.
+	// length hands its position on. A shout, and our own cast, are the same kind of time and are
+	// credited per frame (`MscoCastDriver::tick_combo_age`): a2, shout, spell outran the cap at a
+	// player's pace and the spell then restored nothing. A pending restore's clock is credited
+	// alongside, for the same reason.
 	void credit_held_time(double heldMs)
 	{
 		std::lock_guard lock{ mutex_ };
-		if (!valid_ || heldMs <= 0.0) {
+		if (heldMs <= 0.0) {
 			return;
 		}
-		takenAtMs_ += heldMs;
+		if (valid_) {
+			takenAtMs_ += heldMs;
+		}
+		if (pending_) {
+			armedAtMs_ += heldMs;
+		}
 	}
 
 	void disarm()
@@ -151,6 +176,7 @@ private:
 	bool valid_ = false;
 	bool pending_ = false;
 	double takenAtMs_ = 0.0;
+	double armedAtMs_ = 0.0;
 	McoCombo sample_{};
 	McoCombo restore_{};
 };
@@ -1165,9 +1191,17 @@ inline constexpr double kDeferredAttackCapMs = 200.0;
 // the held attack plays attack 1. So while an attack is held, the edge re-writes but keeps the
 // restore pending; the stomp-undo branches put it back, and the held attack's seam send is the
 // consume -- the same rule BFCO's graph already follows.
-[[nodiscard]] constexpr bool ready_edge_consumes_restore(bool attack_held_for_exit) noexcept
+//
+// And not when nothing is held either, because "the last stomp before the next swing" was
+// wrong: a shout can come between. Measured live: a1, a2, spell, shout, attack. The shout's
+// press cut the spell, the ready edge consumed the restore of attack 3, the ready reset in the
+// same millisecond wrote 1 with nothing pending to undo it, the shout sampled that 1, and the
+// attack played attack 1. So the edge never consumes. An attack's seam send takes the restore,
+// a real swing's advance replaces it, and `RollingMcoCombo::expire_pending` ends one that no
+// attack ever came for.
+[[nodiscard]] constexpr bool ready_edge_consumes_restore(bool /*attack_held_for_exit*/) noexcept
 {
-	return !attack_held_for_exit;
+	return false;
 }
 
 // The swing's cancel window, under BOTH annotation vocabularies.

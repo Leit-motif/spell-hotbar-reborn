@@ -1278,6 +1278,7 @@ namespace SpellHotbar::casts::CastingController {
 			bool is_shouting{ false };
 			player->GetGraphVariableBool("IsShouting"sv, is_shouting);
 			update_deferred_power_restore(delta, is_shouting);
+			MscoCastDriver::tick_combo_age(player, is_shouting);
 			// Before the latch poll, not after: clearing a wedged state here lets the same
 			// frame's poll attempt a press that is still inside its cap. The attempt can still
 			// be refused -- the wedged cast's own instance is torn down later this frame, and a

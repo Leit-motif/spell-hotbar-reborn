@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(SpellHotbar2 VERSION 0.9.6 LANGUAGES CXX)
+project(SpellHotbar2 VERSION 0.9.7 LANGUAGES CXX)
 
 include(CTest)
 

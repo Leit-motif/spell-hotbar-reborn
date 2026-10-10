@@ -829,6 +829,32 @@ namespace SpellHotbar::casts::MscoCastDriver {
 		return consumed;
 	}
 
+	void tick_combo_age(RE::PlayerCharacter* pc, bool a_is_shouting)
+	{
+		// Per unpaused frame. A shout or our own cast is one continuous action, not time out of
+		// the chain, so it is credited off the sample's age and the pending restore's clock, the
+		// same as a concentration hold. The step is capped: the first frame, and a frame after a
+		// hitch, must not credit a gap the player really spent out of combat.
+		static double last_ms = 0.0;
+		const double now = now_ms();
+		const double step = last_ms > 0.0 ? now - last_ms : 0.0;
+		last_ms = now;
+		if ((a_is_shouting || is_active()) && step > 0.0 && step <= 100.0) {
+			g_rolling.credit_held_time(step);
+		}
+		if (g_rolling.expire_pending(now)) {
+			// The last write to the variables was ours: the stomp-undo put the restore back over
+			// the ready reset, and nothing resets them again until the next swing. So put back
+			// what the ready state writes, 1 and 1 (McoCombo's defaults), or the chain continues
+			// however long the player waited. Measured live: a spell, 7 s idle, then attack 3.
+			// Not over an open swing, which owns its own advance.
+			if (pc && !g_swing.open_swing()) {
+				write_mco(pc, McoCombo{});
+			}
+			logger::debug("SH2 cast: combo restore expired; no attack came for it");
+		}
+	}
+
 	void poll_watchdog(RE::PlayerCharacter* pc)
 	{
 		// On vanilla's shout graph the state ends ITSELF after the exhale -- there is no

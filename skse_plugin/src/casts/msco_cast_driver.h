@@ -201,6 +201,12 @@ namespace SpellHotbar::casts::MscoCastDriver {
 	bool notify_attack_cut(RE::PlayerCharacter* pc);
 
 	/**
+	 * Once per unpaused frame: credit time spent shouting or in our own cast off the combo
+	 * sample's age and the pending restore's clock, and expire a pending restore no attack took.
+	 */
+	void tick_combo_age(RE::PlayerCharacter* pc, bool a_is_shouting);
+
+	/**
 	 * Time out a cast state the graph never left. Called once per frame from update_cast.
 	 *
 	 * The state's only ordinary end is the graph raising SH2_CastExit, and the graph is free to

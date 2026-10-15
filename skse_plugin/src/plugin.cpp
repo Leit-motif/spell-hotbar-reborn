@@ -113,6 +113,9 @@ SKSEPluginLoad(const SKSE::LoadInterface * skse)
             }
             SpellHotbar::RenderManager::load_fixed_textures();
             SpellHotbar::GameData::onDataLoad();
+            if (auto* ui = RE::UI::GetSingleton()) {
+                ui->AddEventSink<RE::MenuOpenCloseEvent>(SpellHotbar::events::EventListener::GetSingleton());
+            }
             SpellHotbar::casts::MscoCastDriver::load_charge_curve();
             SpellHotbar::casts::AbilityPrecision::negotiate();
             SpellHotbar::casts::AbilityMagnetism::negotiate();

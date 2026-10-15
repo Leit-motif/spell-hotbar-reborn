@@ -5,9 +5,13 @@
 // without SMF, SH2 hooks the same dispatch call site itself -- the wheeler / IED site at
 // RELOCATION_ID(67315, 68617)+0x7B, which FLICK also hooks. Two `write_call<5>` writes on one
 // site chain: the later install runs first and calls the earlier thunk as its original, so SH2
-// and FLICK both see every frame's events in either load order.
+// and FLICK both see every frame's events in either load order. This outer hook handles only
+// our raw UI controls and release cleanup. Gameplay runs at the engine dispatcher entry,
+// downstream of the host's filtering and before Skyrim can act on captured hotbar presses.
 namespace SpellHotbar::Input {
     // Install the dispatch hook. Needs the SKSE trampoline allocated (plugin.cpp does that once,
     // before every hook install). Call once at kPostLoad, after FLICK's install.
     void install_hook();
+    // Developer-only Papyrus seam: exercise the same raw -> host -> filtered pipeline.
+    void dispatch_test_event(RE::InputEvent* event);
 }

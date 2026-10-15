@@ -17,6 +17,7 @@ namespace SpellHotbar::casts::MscoCastDriver {
 
 	namespace {
 		std::atomic<bool> state_active{ false };
+		std::atomic<bool> missing_behaviors_reported{ false };
 		// True while the live cast is on vanilla's shout graph (first person). Cleared with the
 		// other per-cast flags so it can never outlive the cast that set it.
 		std::atomic<bool> voice_path{ false };
@@ -236,6 +237,17 @@ namespace SpellHotbar::casts::MscoCastDriver {
 			const int index = g_castIndex.current();
 			const auto event = cast_entry_walks_clip_set(shape) ? event_for(index) : kChannelEvent;
 			const bool sent = pc->NotifyAnimationGraph(event);
+			if (!sent) {
+				int selector{0};
+				const bool has_patch_variable = pc->GetGraphVariableInt("SH2_ArtSelector"sv, selector);
+				logger::warn("SH2 cast: entry refused; weaponState={} SH2_ArtSelector readable={}",
+					static_cast<int>(pc->AsActorState()->GetWeaponState()), has_patch_variable);
+				if (!has_patch_variable && pc->AsActorState()->GetWeaponState() == RE::WEAPON_STATE::kDrawn &&
+					!missing_behaviors_reported.exchange(true)) {
+					logger::error("SH2 behavior patch unavailable: regenerate Pandora/Nemesis with Spell Hotbar 2 enabled and ensure its generated behaviors win file conflicts");
+					RE::SendHUDMessage::ShowHUDMessage("Spell Hotbar: regenerate behaviors with Spell Hotbar 2 enabled. See SpellHotbar2.log.");
+				}
+			}
 			state_active.store(sent, std::memory_order_relaxed);
 			state_entered_ms.store(sent ? now_ms() : 0.0, std::memory_order_relaxed);
 			combo_window.store(false, std::memory_order_relaxed);
@@ -897,6 +909,7 @@ namespace SpellHotbar::casts::MscoCastDriver {
 
 	void reset_session()
 	{
+		missing_behaviors_reported.store(false);
 		clear_state_flags();
 		clip_committed.store(false, std::memory_order_relaxed);
 		trace_budget.store(0, std::memory_order_relaxed);

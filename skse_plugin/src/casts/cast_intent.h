@@ -65,6 +65,12 @@ namespace SpellHotbar::casts::CastIntent {
 	 */
 	bool is_pending();
 
+	// Retain a validated spell press while Skyrim draws the current equipment. This is local
+	// readiness, independent of ShoutMCO. Held channels are cancelled if their key is released.
+	bool hold_for_draw(size_t slot, const Input::KeyBind& keybind, bool concentration);
+	bool waiting_for_draw();
+	bool ready_for_spell_entry(RE::PlayerCharacter* player);
+
 	/**
 	 * True when our Driver Cast or Ability is live and its latch is still closed. Start paths
 	 * check this BEFORE attempting a cast: behind our own clip there is nothing to try.

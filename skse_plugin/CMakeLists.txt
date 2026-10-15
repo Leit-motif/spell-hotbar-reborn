@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(SpellHotbar2 VERSION 0.9.7 LANGUAGES CXX)
+project(SpellHotbar2 VERSION 0.9.8 LANGUAGES CXX)
 
 include(CTest)
 
@@ -97,6 +97,7 @@ find_package(directxtk CONFIG REQUIRED)
 find_package(CommonLibSSE CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(RapidJSON CONFIG REQUIRED)
+find_package(minhook CONFIG REQUIRED)
 
 set(source_files src/plugin.cpp
                  src/logger/logger.h
@@ -125,6 +126,7 @@ set(source_files src/plugin.cpp
                  "src/input/input.cpp"
                  "src/input/input_hook.h"
                  "src/input/input_hook.cpp"
+                 "src/input/host_filter_state.cpp"
                  "src/input/action_inject.h"
                  "src/input/input_event_adapter.h"
                  "src/input/keybinds.h"
@@ -350,7 +352,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE "src")
 # imgui for its headers only: ImVec2, ImU32 and IM_COL32 in the texture registry and the display
 # lists. FUCK.dll does every draw call. The plugin still links the static copy for those symbols;
 # its context is never created, which is why no ImGui:: call may appear anywhere in src (below).
-target_link_libraries(${PROJECT_NAME} PRIVATE imgui::imgui)
+target_link_libraries(${PROJECT_NAME} PRIVATE imgui::imgui minhook::minhook bcrypt)
 
 # The FLICK side is compiled apart from the rest of the plugin. The split began as a necessity
 # (SMF's ImGuiMCP::ImVec2 and imgui.h's ImVec2 could not share a translation unit) and stays as a

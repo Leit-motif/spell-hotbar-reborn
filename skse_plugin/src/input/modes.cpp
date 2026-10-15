@@ -58,7 +58,7 @@ namespace SpellHotbar::Input {
 		// A buffer that expires instead just leaves the red it already painted.
 		void report_press(size_t slot, bool success)
 		{
-			if (casts::CastIntent::holding_for_leftover_clip()) {
+			if (casts::CastIntent::holding_for_leftover_clip() || casts::CastIntent::waiting_for_draw()) {
 				return;
 			}
 			const bool started = success && !casts::CastIntent::is_pending();

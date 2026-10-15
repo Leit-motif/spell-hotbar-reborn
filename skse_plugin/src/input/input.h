@@ -19,6 +19,9 @@ namespace SpellHotbar::Input {
 	 * remove this event from Skyrim's input queue.
 	 */
 	bool __stdcall process_event(RE::InputEvent* event);
+	bool process_raw_event(RE::InputEvent* event);
+	// Read our last normal-dispatch snapshot; never fabricate input to query the host.
+	bool host_allows_gameplay_input();
 
 	bool in_binding_menu();
 

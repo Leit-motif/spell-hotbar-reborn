@@ -1672,6 +1672,11 @@ namespace SpellHotbar::casts::CastingController {
 							}
 							CastingInstanceSpellData cast_info{ spell, casttime, manacost, hand, dual_cast, spell_data.animation, spell_data.animation2, spell_data.casteffectid, is_spell_proc};
 
+							if (!CastIntent::ready_for_spell_entry(pc)) {
+								return CastIntent::hold_for_draw(slot, keybind,
+									spell->GetCastingType() == RE::MagicSystem::CastingType::kConcentration);
+							}
+
 							start_result result{ start_result::failed };
 							if (spell->GetCastingType() == RE::MagicSystem::CastingType::kConcentration) {
 								if (spell->IsTwoHanded()) {

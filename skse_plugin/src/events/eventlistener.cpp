@@ -8,6 +8,15 @@
 
 namespace SpellHotbar::events {
 
+    RE::BSEventNotifyControl EventListener::ProcessEvent(const RE::MenuOpenCloseEvent* event,
+        RE::BSTEventSource<RE::MenuOpenCloseEvent>*)
+    {
+        // A menu can open and close while the unpaused cast poll never runs. Invalidate the
+        // admission token here; no game-state mutation or cast-controller access off-thread.
+        if (event && event->opening) Flick::invalidate_input_context();
+        return RE::BSEventNotifyControl::kContinue;
+    }
+
     namespace {
         // Blunt Shot's knockdown is a sweep, not a launch: it must take the target off their feet,
         // not throw them backwards, and a force-5 push from the shooter's position only leaves them

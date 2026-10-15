@@ -34,6 +34,7 @@ namespace SpellHotbar::Flick {
         // Read from the input thread; written from the render thread's listener callback.
         std::atomic_bool any_foreign_window_open{false};
         std::atomic_bool connected{false};
+        std::atomic<std::uint64_t> window_revision{0};
 
         FUCK::WindowEventListener window_listener;
 
@@ -348,6 +349,7 @@ namespace SpellHotbar::Flick {
         {
             const std::string plugin = a_plugin ? a_plugin : "";
             const std::string window = a_window ? a_window : "";
+            window_revision.fetch_add(1, std::memory_order_relaxed);
             if (plugin == plugin_name) {
                 return;
             }
@@ -399,6 +401,8 @@ namespace SpellHotbar::Flick {
             return;
         }
 
+        // This listener only controls dock visibility and withdraws buffered input when the
+        // GUI context changes. Gameplay consumes the stock host's filtered event stream.
         window_listener = FUCK::WindowEventListener(&on_window_event);
         connected.store(true, std::memory_order_relaxed);
         SKSE::log::info("Watching FLICK guest windows");
@@ -407,6 +411,26 @@ namespace SpellHotbar::Flick {
     bool is_connected()
     {
         return connected.load(std::memory_order_relaxed);
+    }
+
+    bool host_menu_open()
+    {
+        return is_connected() && FUCK::IsMenuOpen();
+    }
+
+    std::uint64_t input_context_revision()
+    {
+        static std::atomic_bool last_menu{false};
+        const bool menu = host_menu_open();
+        if (last_menu.exchange(menu, std::memory_order_relaxed) != menu) {
+            window_revision.fetch_add(1, std::memory_order_relaxed);
+        }
+        return window_revision.load(std::memory_order_relaxed);
+    }
+
+    void invalidate_input_context()
+    {
+        window_revision.fetch_add(1, std::memory_order_relaxed);
     }
 
     void close_host_menu()
@@ -438,7 +462,7 @@ namespace SpellHotbar::Flick {
         // chrome list above exists. IsMenuOpen() is the host's own "a guest menu owns the screen"
         // flag; a guest could in principle latch it forever, but it read false across 16 minutes
         // of ordinary menu use, so it does not latch here.
-        // Worst case is now contained: this gate reaches only the in-menu bar, never the HUD.
+        // Display policy only. Gameplay never classifies foreign windows here.
         return foreign || menu_flag;
     }
 

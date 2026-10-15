@@ -10,6 +10,7 @@
 #include "../game_data/game_data.h"
 #include "../logger/logger.h"
 #include "../rendering/render_manager.h"
+#include "../flick/flick_watch.h"
 
 namespace SpellHotbar::casts::CastIntent {
 
@@ -24,6 +25,10 @@ namespace SpellHotbar::casts::CastIntent {
 			hand_mode hand;
 			// Points into Input::key_spells / key_oblivion_*, which are globals: safe to keep.
 			const Input::KeyBind* keybind;
+			int trigger_code{ keybind ? keybind->get_dx_scancode() : -1 };
+			// A GUI transition after admission withdraws a buffered press, even if it closes
+			// again before release. Current open windows never classify new gameplay input.
+			std::uint64_t input_revision{ Flick::input_context_revision() };
 		};
 
 		const ShoutMCO_CastIntentApi* api{ nullptr };
@@ -53,9 +58,12 @@ namespace SpellHotbar::casts::CastIntent {
 		// goes back on the latch and waits for `attackStop`. Cleared whenever a press is freshly
 		// retained.
 		bool window_attempt_spent{ false };
+		bool draw_pending{ false };
+		bool draw_concentration{ false };
 
 		void clear_payload()
 		{
+			draw_pending = false;
 			live_handle = SHOUTMCO_CAST_HANDLE_INVALID;
 			payload_retained = false;
 			payload = {};
@@ -121,7 +129,8 @@ namespace SpellHotbar::casts::CastIntent {
 
 		bool payload_still_bound(const Payload& p, const SlottedSkill& skill)
 		{
-			return skill.formID == p.formID && skill.type == p.type && skill.hand == p.hand &&
+			return p.keybind && p.keybind->get_dx_scancode() == p.trigger_code &&
+				skill.formID == p.formID && skill.type == p.type && skill.hand == p.hand &&
 				   skill.art_id == p.art_id;
 		}
 
@@ -191,7 +200,8 @@ namespace SpellHotbar::casts::CastIntent {
 		ReleaseOutcome attempt_release(const Payload& p, bool a_fallback_remains = false)
 		{
 			auto pc = RE::PlayerCharacter::GetSingleton();
-			if (!pc || pc->IsDead() || !Input::in_ingame_state()) {
+			if (!pc || pc->IsDead() || !Input::in_ingame_state() ||
+				p.input_revision != Flick::input_context_revision() || !Input::host_allows_gameplay_input()) {
 				logger::debug("SH2 cast intent: released into a state that cannot cast, discarded");
 				return ReleaseOutcome::discarded;
 			}
@@ -295,6 +305,38 @@ namespace SpellHotbar::casts::CastIntent {
 		return payload_retained;
 	}
 
+	bool waiting_for_draw()
+	{
+		return payload_retained && draw_pending;
+	}
+
+	bool ready_for_spell_entry(RE::PlayerCharacter* player)
+	{
+		if (!player || player->AsActorState()->GetWeaponState() != RE::WEAPON_STATE::kDrawn) return false;
+		// The actor field reaches kDrawn before ReadyState has finished its graph transition.
+		// Sending SH2_Cast* in that interval still returns false (live AE1170 reproduction).
+		bool equipping{ false };
+		player->GetGraphVariableBool("IsEquipping"sv, equipping);
+		return !equipping;
+	}
+
+	bool hold_for_draw(size_t slot, const Input::KeyBind& keybind, bool concentration)
+	{
+		auto* pc = RE::PlayerCharacter::GetSingleton();
+		if (!pc || attempting_release) {
+			return false;
+		}
+		retain_local_payload(slot, keybind, true);
+		draw_pending = true;
+		draw_concentration = concentration;
+		const auto state = pc->AsActorState()->GetWeaponState();
+		if (state != RE::WEAPON_STATE::kDrawing && state != RE::WEAPON_STATE::kWantToDraw) {
+			pc->DrawWeaponMagicHands(true);
+		}
+		logger::debug("SH2 cast: slot {} waiting for weapon draw (channel={})", slot, concentration);
+		return true;
+	}
+
 	bool is_firing()
 	{
 		return attempting_release;
@@ -390,6 +432,38 @@ namespace SpellHotbar::casts::CastIntent {
 	void poll_local_release()
 	{
 		if (attempting_release || !payload_retained || live_handle != SHOUTMCO_CAST_HANDLE_INVALID) {
+			return;
+		}
+		if (payload.input_revision != Flick::input_context_revision() || !Input::host_allows_gameplay_input()) {
+			logger::debug("SH2 cast intent: host context lost while pending, discarded");
+			clear_payload();
+			return;
+		}
+		if (draw_pending) {
+			auto* pc = RE::PlayerCharacter::GetSingleton();
+			const auto skill = GameData::get_current_spell_info_in_slot(payload.slot);
+			if (!pc || pc->IsDead() || !Input::in_ingame_state() ||
+				payload.input_revision != Flick::input_context_revision() ||
+				!payload_still_bound(payload, skill) ||
+				(draw_concentration && (!payload.keybind || !payload.keybind->isDown()))) {
+				logger::debug("SH2 cast: pending draw cancelled by context, binding, or channel release");
+				clear_payload();
+				return;
+			}
+			if (UnpausedClock::now_ms() - retained_at_ms >= 3000.0) {
+				const auto slot = payload.slot;
+				clear_payload();
+				logger::warn("SH2 cast: weapon draw timed out for slot {}", slot);
+				RenderManager::highlight_skill_slot(static_cast<int>(slot), 0.5f, true);
+				return;
+			}
+			if (!ready_for_spell_entry(pc)) {
+				return;
+			}
+			const Payload p = payload;
+			clear_payload();
+			logger::debug("SH2 cast: weapon drawn, releasing slot {} once", p.slot);
+			attempt_release(p);
 			return;
 		}
 		// Ahead of the retain bail, because a latch that never opens is exactly the case the

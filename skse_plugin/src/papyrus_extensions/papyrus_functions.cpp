@@ -9,6 +9,23 @@
 #include "../input/keybinds.h"
 #include "../storage/user_data_io.h"
 #include "../input/modes.h"
+#include "../input/input_hook.h"
+
+// This uses the production hook chain, including the stock host's filtering. It is distinct
+// from castSlot, which intentionally starts at the casting mode. No developer PEX ships.
+void dispatch_slot_input(RE::StaticFunctionTag*, int slot_index, bool down)
+{
+    SKSE::GetTaskInterface()->AddTask([slot_index, down]() {
+        using namespace SpellHotbar;
+        if (slot_index < 0 || slot_index >= static_cast<int>(Input::key_spells.size())) return;
+        const auto [device, key] = Input::dx_scan_code_to_input(Input::key_spells[slot_index].get_dx_scancode());
+        if (device == RE::INPUT_DEVICE::kNone) return;
+        auto* event = RE::ButtonEvent::Create(device, ""sv, key, down ? 1.0f : 0.0f, down ? 0.0f : 0.2f);
+        if (!event) return;
+        Input::dispatch_test_event(event);
+        delete event;
+    });
+}
 
 int get_number_of_slots(RE::StaticFunctionTag*)
 {
@@ -758,6 +775,7 @@ bool toggle_individual_shout_cooldowns(RE::StaticFunctionTag*) {
 }
 
 bool SpellHotbar::register_papyrus_functions(RE::BSScript::IVirtualMachine* vm) {
+    vm->RegisterFunction("dispatchSlotInput", "RebornInputQA", dispatch_slot_input);
     vm->RegisterFunction("castSlot", "SpellHotbar", cast_slot);
     vm->RegisterFunction("slotArt", "SpellHotbar", slot_art);
     vm->RegisterFunction("slotSpell", "SpellHotbar", slot_spell);

@@ -12,6 +12,7 @@
 // own CMake target (sh2_flick, see flick_pch.h) and hands back plain types.
 #include <string>
 #include <vector>
+#include <cstdint>
 
 namespace SpellHotbar::Flick {
     // The name SH2 will register its own windows under once it becomes a guest. Windows carrying
@@ -24,6 +25,9 @@ namespace SpellHotbar::Flick {
     void install();
 
     bool is_connected();
+    bool host_menu_open();
+    std::uint64_t input_context_revision();
+    void invalidate_input_context();
 
     // Close FLICK's own config menu (F7). A Spell Hotbar 2 window opened from a config page
     // would otherwise sit under the menu that opened it.
@@ -33,8 +37,8 @@ namespace SpellHotbar::Flick {
     // by register_windows() with the dock. Off through diagnostics.ini `DisableFlickHud`.
     void register_hud_windows();
 
-    // True while any FLICK surface other than SH2's own owns the screen -- another guest's window
-    // (Fitting Room, Menu Studio) or FLICK's own F7 config menu.
+    // Conservative dock-visibility policy only. Gameplay input is filtered dynamically by
+    // stock FLICK before reaching our downstream handler; it must never use this predicate.
     //
     // Note for the port: `FUCK::IsMenuOpen()` alone is NOT this answer. It maps to
     // `FUCKMan::IsOpen()`, which is the F7 menu and nothing else, and is blind to Fitting Room --

@@ -146,8 +146,11 @@ namespace SpellHotbar::Input {
         }
     }
 
-    static InputEventDecision<RE::InputEvent> process_event_impl(RE::InputEvent* event)
+    enum class InputPhase { raw_ui, filtered_gameplay };
+
+    static InputEventDecision<RE::InputEvent> process_event_impl(RE::InputEvent* event, InputPhase phase)
     {
+        const bool raw = phase == InputPhase::raw_ui;
         if (!event) {
             return {};
         }
@@ -164,10 +167,10 @@ namespace SpellHotbar::Input {
                 const int trigger_dx_scancode = input_to_dx_scancode(
                     key_device, static_cast<uint8_t>(key_code));
                 if (trigger_dx_scancode >= 0) {
-                    if (button_event->IsUp()) {
+                    if (raw && button_event->IsUp()) {
                         action_event_handled = casts::CastingController::release_action_for_trigger(
                             static_cast<std::uint32_t>(trigger_dx_scancode), button_event->HeldDuration());
-                    } else if (button_event->IsRepeating()) {
+                    } else if (!raw && button_event->IsRepeating()) {
                         action_event_handled = casts::CastingController::mirror_action_hold(
                             static_cast<std::uint32_t>(trigger_dx_scancode), button_event->Value(),
                             button_event->HeldDuration());
@@ -205,7 +208,7 @@ namespace SpellHotbar::Input {
                     // the dialog's Cancel button: any click is itself a candidate binding, and a
                     // capture that let one through would bind the button the player used to stop.
                     // Escape is the cancel, and the armed prompt says so.
-                    if (capture.action_armed()) {
+                    if (raw && capture.action_armed()) {
                         if (bEvent->IsDown()) {
                             const bool is_escape =
                                 key_device == RE::INPUT_DEVICE::kKeyboard && key_code == 1;
@@ -218,7 +221,7 @@ namespace SpellHotbar::Input {
                             }
                         }
                         captureEvent = true;
-                    } else if (capture.armed()) {
+                    } else if (raw && capture.armed()) {
                         if (bEvent->IsDown()) {
                             const bool is_escape =
                                 key_device == RE::INPUT_DEVICE::kKeyboard && key_code == 1;
@@ -270,7 +273,7 @@ namespace SpellHotbar::Input {
                     // an up edge for a press it never saw, and the game is free to act on either.
                     static std::optional<std::pair<RE::INPUT_DEVICE, uint32_t>> dismiss_key;
 
-                    if (smf_blocking && bEvent->IsDown()) {
+                    if (raw && smf_blocking && bEvent->IsDown()) {
                         const bool is_escape =
                             key_device == RE::INPUT_DEVICE::kKeyboard && key_code == 1;
                         // Typing "Fire Slash" into an Ability's name field must not close the
@@ -294,7 +297,7 @@ namespace SpellHotbar::Input {
                             captureEvent = true;
                         }
                     }
-                    else if (dismiss_key && dismiss_key->first == key_device &&
+                    else if (raw && dismiss_key && dismiss_key->first == key_device &&
                              dismiss_key->second == key_code) {
                         if (bEvent->IsDown()) {
                             // A fresh press with no window of ours open, which means the release
@@ -343,7 +346,7 @@ namespace SpellHotbar::Input {
                     // from the commitment point to the end of the clip. A cast still CHARGING has
                     // a live instance and no commitment, so neither half admits it and a press
                     // then keeps today's behaviour.
-                    if (!captureEvent && pc && bEvent->IsDown() && in_ingame_state() &&
+                    if (!raw && !captureEvent && pc && bEvent->IsDown() && in_ingame_state() &&
                         (casts::CastingController::is_committed_cast_holding_graph() ||
                          casts::CastingController::is_cuttable_follow_through()))
                     {
@@ -369,7 +372,7 @@ namespace SpellHotbar::Input {
                     // `should_capture_attack_during_ability`, `should_cut_ability_for_attack` --
                     // and is asked about an outgoing graph event rather than a key number.
 
-                    if (!captureEvent && !smf_blocking) {
+                    if (!raw && !captureEvent && !smf_blocking) {
                         bool handled{ false };
                         if (!Bars::disable_non_modifier_bar || Input::mod_1.isDown() || Input::mod_2.isDown() || Input::mod_3.isDown()) {
 
@@ -507,7 +510,13 @@ namespace SpellHotbar::Input {
 
     bool __stdcall process_event(RE::InputEvent* event)
     {
-        return input_event_adapter.process(event, process_event_impl);
+        return input_event_adapter.process(event, [](RE::InputEvent* e) { return process_event_impl(e, InputPhase::filtered_gameplay); });
+    }
+
+    bool process_raw_event(RE::InputEvent* event)
+    {
+        static thread_local InputEventAdapter<RE::InputEvent> raw_adapter;
+        return raw_adapter.process(event, [](RE::InputEvent* e) { return process_event_impl(e, InputPhase::raw_ui); });
     }
 
     KeyModifier::KeyModifier(RE::INPUT_DEVICE device, uint8_t code1, uint8_t code2)
@@ -615,11 +624,10 @@ namespace SpellHotbar::Input {
         {
             return false;
         }
-        // An overlay is outside the menu: FLICK's own config menu and another
-        // guest's window are invisible to RE::UI, and this hook now runs ahead of FLICK's own
-        // (input_hook.h), so it sees the raw press before the host zeroes it. A hotbar key
-        // typed into the host's menu must not cast.
-        if (Flick::another_guest_owns_the_screen()) {
+        // Gameplay runs at the engine dispatcher, after FLICK has filtered the events.
+        // Counting foreign windows here discards that decision and breaks passive HUDs.
+        // Our own blocking windows still guard developer calls and deferred payloads.
+        if (RenderManager::should_block_game_key_inputs() || Flick::host_menu_open()) {
             return false;
         }
         return true;
@@ -1059,7 +1067,7 @@ namespace SpellHotbar::Input {
         // never calls AllowTextInput, so textEntryCount stays 0 while the player is typing. That
         // is how, without this guard, a bind-menu key bound to C eats the C out of Fitting Room's
         // search box. An overlay is outside the menu: claim no key while one owns the screen.
-        if (Flick::another_guest_owns_the_screen() || Flick::host_is_taking_keystrokes())
+        if (Flick::host_is_taking_keystrokes())
         {
             return false;
         }

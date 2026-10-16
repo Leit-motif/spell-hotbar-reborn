@@ -161,11 +161,25 @@ namespace SpellHotbar::FlickUi::ConfigTool {
         {
             auto& capture = Mcp::bind_capture();
             FUCK::PushID(id);
-            const int code = Input::get_keybind(id);
+            const ImVec2 row_start = FUCK::GetCursorScreenPos();
+            float prompt_height = 0.0f;
             const std::string name = capture.armed() && capture.pending_id() == id
-                                         ? "Press a key..."
-                                         : GameData::get_key_text_long(code);
-            FUCK::Text("%s: %s", k_keybind_labels[id], name.c_str());
+                                         ? "Press a key, or hold gamepad buttons and release the final button..."
+                                         : GameData::get_binding_text(id);
+            const bool capturing = capture.armed() && capture.pending_id() == id;
+            if (!capturing && Bars::use_keybind_icons() && Input::get_gamepad_modifiers(id)) {
+                FUCK::Text("%s:", k_keybind_labels[id]);
+                FUCK::SameLine();
+                const ImVec2 at = FUCK::GetCursorScreenPos();
+                const float h = FUCK::GetFrameHeight();
+                prompt_height = GameData::get_binding_icon_indices(id, key_modifier::none).size() == 3 ? h * 2.08f : h;
+                FUCK::Dummy(ImVec2(scale(160.0f), prompt_height));
+                FUCK::SameLine();
+                binding_prompt_at(at, col_white, id, key_modifier::none, scale(160.0f), prompt_height, h, true);
+            }
+            else {
+                FUCK::Text("%s: %s", k_keybind_labels[id], name.c_str());
+            }
             FUCK::SameLine();
             if (FUCK::Button("Rebind")) {
                 capture.arm(id);
@@ -178,10 +192,26 @@ namespace SpellHotbar::FlickUi::ConfigTool {
                 }
             }
             FUCK::PopID();
+            if (prompt_height > 0.0f) {
+                FUCK::SetCursorScreenPos(ImVec2(row_start.x, row_start.y + prompt_height));
+                FUCK::Dummy(ImVec2(0.0f, 0.0f));
+            }
+        }
+
+        void draw_controller_labels()
+        {
+            constexpr const char* styles[] = { "Xbox", "PlayStation", "Steam Controller (2026)" };
+            int style = static_cast<int>(GameData::get_controller_label_style());
+            if (combo("Controller Labels", &style, styles, 3)) {
+                GameData::set_controller_label_style(GameData::controller_label_style(style));
+            }
+            item_tooltip("Controller Labels", "Changes button text and icons only. Custom key-name rows stay as supplied. PlayStation uses Options / Share. Steam Controller (2026) uses Steam Input gamepad outputs; extra grips and trackpads use the key/button they are mapped to.");
         }
 
         void draw_keybinds()
         {
+            draw_controller_labels();
+            FUCK::TextWrapped("Gamepad combinations: hold your modifier buttons, press the final button, then release it to save. Only the final button is consumed during play. Escape cancels capture.");
             FUCK::SeparatorText("Skill Bindings");
             for (int id = Input::keybind_id::spell_1; id <= Input::keybind_id::spell_12; ++id) {
                 draw_keybind_row(id);

@@ -49,6 +49,7 @@ namespace SpellHotbar::Input {
             static void thunk(RE::BSTEventSource<RE::InputEvent*>* a_dispatcher, RE::InputEvent** a_events)
             {
                 (void)Flick::input_context_revision();
+                begin_gamepad_frame();
                 filter_events(a_events, process_raw_event);
                 func(a_dispatcher, a_events);
                 (void)Flick::input_context_revision();
@@ -80,9 +81,12 @@ namespace SpellHotbar::Input {
         logger::info("SH2 input: hooked the input dispatch site (67315+0x7B)");
     }
 
-    void dispatch_test_event(RE::InputEvent* event)
+    bool dispatch_test_event(RE::InputEvent* event)
     {
-        DispatchInputEventHook::thunk(RE::BSInputDeviceManager::GetSingleton(), &event);
+        auto* remaining = event;
+        DispatchInputEventHook::thunk(RE::BSInputDeviceManager::GetSingleton(), &remaining);
+        for (auto* node = remaining; node; node = node->next) { if (node == event) { return true; } }
+        return false;
     }
 
     bool host_allows_gameplay_input()

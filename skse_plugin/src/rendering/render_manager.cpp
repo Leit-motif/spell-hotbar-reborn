@@ -498,6 +498,8 @@ void RenderManager::reload_resouces() {
     logger::info("Clearing all Resources...");
 
     GameData::key_names.clear();
+    GameData::playstation_key_names.clear();
+    GameData::steam_key_names.clear();
 
     editor_icon_list.clear();
     spell_icons.clear();

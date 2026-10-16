@@ -4,6 +4,7 @@
 #include <string_view>
 
 #include "action_inject.h"
+#include "gamepad_binding.h"
 #include "../game_data/action_definition.h"
 
 namespace SpellHotbar::Input {
@@ -20,6 +21,7 @@ namespace SpellHotbar::Input {
 	 */
 	bool __stdcall process_event(RE::InputEvent* event);
 	bool process_raw_event(RE::InputEvent* event);
+	void begin_gamepad_frame();
 	// Read our last normal-dispatch snapshot; never fabricate input to query the host.
 	bool host_allows_gameplay_input();
 
@@ -29,6 +31,7 @@ namespace SpellHotbar::Input {
 
 	std::tuple<RE::INPUT_DEVICE, uint8_t> dx_scan_code_to_input(int dx_scancode);
 	int input_to_dx_scancode(RE::INPUT_DEVICE device, uint8_t code);
+	RE::ButtonEvent* button_event_from_dx_scancode(int code, float value, float held_duration);
 
 	std::tuple<RE::INPUT_DEVICE, uint8_t> get_shout_key_and_device();
 	int get_shout_key_dxcode();
@@ -97,6 +100,8 @@ namespace SpellHotbar::Input {
 		int get_dx_scancode() const;
 
 		void assign_from_dx_scancode(int code);
+		std::uint16_t gamepad_modifiers() const { return gamepad_modifiers_; }
+		void set_gamepad_modifiers(std::uint16_t modifiers) { gamepad_modifiers_ = modifiers; }
 
 		void update(uint32_t key_code, RE::INPUT_DEVICE key_device, bool is_pressed);
 
@@ -124,5 +129,6 @@ namespace SpellHotbar::Input {
 		RE::INPUT_DEVICE input_device;
 		uint8_t keycode;
 		bool m_isDown;
+		std::uint16_t gamepad_modifiers_{ 0 };
 	};
 }

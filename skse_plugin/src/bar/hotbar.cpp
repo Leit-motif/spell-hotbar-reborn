@@ -359,10 +359,18 @@ namespace SpellHotbar
         const float text_offset_x = icon * 0.07f;
         const float text_offset_y = icon * 0.06f;
 
+        bool combinations = false;
+        for (int i = 0; i < m_barsize; ++i) { combinations |= Input::get_gamepad_modifiers(i) != 0; }
+        const float resolution_scale = screensize_y / 540.0f;
+        // Keep the configured spell-icon size. Combination captions get their own
+        // wider cells and strip, so a small menu scale does not shrink them to illegibility.
+        const float cell_width = combinations ? std::max(icon, 40.0f * resolution_scale) : icon;
+        const float caption_px = combinations ? std::max(icon * 0.32f, 10.0f * resolution_scale) : 0.0f;
         //Same wrap trigger as draw_in_menu: 60% of the display, never an input to the size.
-        int row_len = static_cast<int>(std::floor((screensize_x * 0.60f + spacing) / (icon + spacing)));
+        int row_len = static_cast<int>(std::floor((screensize_x * 0.60f + spacing) / (cell_width + spacing)));
         row_len = std::clamp(row_len, 1, static_cast<int>(m_barsize));
-        const float key_strip_h = Bars::use_keybind_icons() ? icon * 0.5f : 0.0f;
+        const float key_strip_h = combinations ? std::max(icon * 0.5f, 34.0f * resolution_scale) :
+            (Bars::use_keybind_icons() ? icon * 0.5f : 0.0f);
         const float row_h = icon + key_strip_h + spacing;
 
         const ImU32 white = IM_COL32_WHITE;
@@ -377,7 +385,8 @@ namespace SpellHotbar
             }
 
             const int col_i = i % row_len, row_i = i / row_len;
-            const float x = col_i * (icon + spacing);
+            const float cell_x = col_i * (cell_width + spacing);
+            const float x = cell_x + (cell_width - icon) * 0.5f;
             const float y = row_i * row_h;
 
             size_t count{ 0 };
@@ -422,25 +431,13 @@ namespace SpellHotbar
                 push_image(frame.images, RenderManager::default_icon_tex(GameData::DefaultIconType::BAR_OVERLAY), x, y, icon, icon, col);
             }
 
-            if (Bars::use_keybind_icons()) {
-                auto [tex_id_key, tex_id_mod] = GameData::get_keybind_icon_index(i, mod);
-                const TextureImage* key = RenderManager::button_tex(tex_id_key);
-                const TextureImage* modt = RenderManager::button_tex(tex_id_mod);
-                float kx = x;
-                if (modt != nullptr && key != nullptr) {
-                    const float w = key_strip_h * static_cast<float>(modt->width) / static_cast<float>(modt->height);
-                    push_texture(frame.images, modt, kx, y + icon, w, key_strip_h, white);
-                    kx += w;
-                }
-                if (key != nullptr) {
-                    const float w = key_strip_h * static_cast<float>(key->width) / static_cast<float>(key->height);
-                    push_texture(frame.images, key, kx, y + icon, w, key_strip_h, white);
-                }
-            }
-            else {
-                frame.texts.push_back(Flick::DockText{ x + text_offset_x, y + text_offset_y, 0,
-                                                       GameData::get_keybind_text(i, mod), static_cast<unsigned>(white) });
-            }
+            const bool icons = Bars::use_keybind_icons();
+            frame.prompts.push_back(Flick::BindingPrompt{
+                combinations ? cell_x + cell_width * 0.04f : x + text_offset_x,
+                icons || combinations ? y + icon : y + text_offset_y,
+                cell_width * 0.92f, icons || combinations ? key_strip_h : icon * 0.65f,
+                std::max(icon * 0.5f, 20.0f * resolution_scale), i, static_cast<int>(mod),
+                static_cast<unsigned>(white), icons });
 
             if (skill.hand == hand_mode::left_hand || skill.hand == hand_mode::right_hand || skill.hand == hand_mode::dual_hand) {
                 const char* key = skill.hand == hand_mode::left_hand ? "$HAND_TEXT_LEFT"
@@ -455,11 +452,11 @@ namespace SpellHotbar
                                                        static_cast<unsigned>(white) });
             }
 
-            frame.slots.push_back(Flick::DockSlot{ x, y, icon, icon, describe_slot(i, mod) });
+            frame.slots.push_back(Flick::DockSlot{ cell_x, y, cell_width, icon + key_strip_h, describe_slot(i, mod) });
         }
 
         const int rows = (m_barsize + row_len - 1) / row_len;
-        frame.width = row_len * icon + (row_len - 1) * spacing;
+        frame.width = row_len * cell_width + (row_len - 1) * spacing;
         frame.height = rows * (icon + key_strip_h) + (rows - 1) * spacing;
         return frame;
     }
@@ -677,7 +674,7 @@ namespace SpellHotbar
         }
         else {
             const int row_len = std::max(1, static_cast<int>(Bars::bar_row_len));
-            const float key_strip = Bars::use_keybind_icons() ? icon * 0.35f * keybind_icon_pos_factor : 0.0f;
+            const float key_strip = Bars::use_keybind_icons() ? icon * 0.65f : 0.0f;
             const float row_pitch = icon + spacing + key_strip;
             int rows = 0;
             for (int i = 0; i < m_barsize; i++) {
@@ -688,10 +685,6 @@ namespace SpellHotbar
             }
             grid_w = std::min(row_len, static_cast<int>(m_barsize)) * (icon + spacing) - spacing;
             grid_h = rows * row_pitch - spacing;
-            if (Bars::use_keybind_icons()) {
-                // The key glyph hangs below the slot (drawn at 0.8 of it, half a slot tall).
-                grid_h += icon * 0.3f;
-            }
         }
 
         layer.texts.push_back(Flick::DockText{ grid_w * 0.5f, 0.0f, 3, this->get_name(),
@@ -859,36 +852,12 @@ namespace SpellHotbar
             push_image(images, RenderManager::default_icon_tex(GameData::DefaultIconType::BAR_HIGHLIGHT), x, y, icon, icon, col);
         }
 
-        if (!Bars::use_keybind_icons()) {
-            layer.texts.push_back(Flick::DockText{ x + ctx.text_offset_x, y + ctx.text_offset_y, 0,
-                                                   GameData::get_keybind_text(slot_index, ctx.mod), static_cast<unsigned>(white) });
-        }
-        else {
-            // The key glyph, half a slot tall, centred under the slot at 0.8 of its height; with a
-            // modifier glyph beside it the pair is squeezed to 0.95 of the slot width.
-            auto [icon_main, icon_mode] = GameData::get_keybind_icon_index(slot_index, ctx.mod);
-            const TextureImage* key = RenderManager::button_tex(icon_main);
-            const TextureImage* modt = icon_mode >= 0 ? RenderManager::button_tex(icon_mode) : nullptr;
-            if (key != nullptr && key->height > 0) {
-                float h = icon * 0.5f;
-                const float aspect_key = static_cast<float>(key->width) / static_cast<float>(key->height);
-                const float aspect_mod = (modt != nullptr && modt->height > 0)
-                                             ? static_cast<float>(modt->width) / static_cast<float>(modt->height) : 0.0f;
-                float total_w = h * aspect_key + h * aspect_mod;
-                const float max_w = icon * 0.95f;
-                if (modt != nullptr && total_w > max_w) {
-                    h *= max_w / total_w;
-                    total_w = h * aspect_key + h * aspect_mod;
-                }
-                float kx = x + icon * 0.5f - total_w * 0.5f;
-                const float ky = y + icon * keybind_icon_pos_factor;
-                if (modt != nullptr) {
-                    push_texture(images, modt, kx, ky, h * aspect_mod, h, white);
-                    kx += h * aspect_mod;
-                }
-                push_texture(images, key, kx, ky, h * aspect_key, h, white);
-            }
-        }
+        const bool icons = Bars::use_keybind_icons();
+        const bool inset = Bars::layout == Bars::bar_layout::CIRCLE || Bars::layout == Bars::bar_layout::CROSS;
+        layer.prompts.push_back(Flick::BindingPrompt{
+            x + icon * 0.03f, icons ? y + icon * (inset ? 0.15f : 0.80f) : y + ctx.text_offset_y,
+            icon * 0.94f, icons ? icon * 0.85f : icon * 0.65f,
+            icon * 0.50f, slot_index, static_cast<int>(ctx.mod), static_cast<unsigned>(white), icons, inset ? 0.0f : icon * 0.75f });
 
         if (has_charges) {
             ImU32 count_text_color = white;

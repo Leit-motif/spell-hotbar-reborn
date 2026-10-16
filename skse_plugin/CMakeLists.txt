@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(SpellHotbar2 VERSION 0.9.8 LANGUAGES CXX)
+project(SpellHotbar2 VERSION 0.9.9 LANGUAGES CXX)
 
 include(CTest)
 
@@ -258,6 +258,20 @@ target_include_directories(art_overlay_json_test PRIVATE src/game_data)
 target_link_libraries(art_overlay_json_test PRIVATE rapidjson)
 
 add_executable(bind_capture_test src/mcp/bind_capture_test.cpp)
+add_executable(key_label_layout_test src/rendering/key_label_layout_test.cpp)
+target_compile_features(key_label_layout_test PRIVATE cxx_std_23)
+add_test(NAME key_label_layout_test COMMAND key_label_layout_test)
+add_executable(binding_glyph_layout_test src/rendering/binding_glyph_layout_test.cpp)
+target_compile_features(binding_glyph_layout_test PRIVATE cxx_std_23)
+target_link_libraries(binding_glyph_layout_test PRIVATE rapidjson)
+add_test(NAME binding_glyph_layout_test COMMAND binding_glyph_layout_test)
+add_executable(controller_labels_test src/game_data/controller_labels_test.cpp)
+target_compile_features(controller_labels_test PRIVATE cxx_std_23)
+target_link_libraries(controller_labels_test PRIVATE rapidjson)
+add_test(NAME controller_labels_test COMMAND controller_labels_test)
+add_executable(gamepad_binding_test src/input/gamepad_binding_test.cpp)
+target_compile_features(gamepad_binding_test PRIVATE cxx_std_23)
+target_link_libraries(gamepad_binding_test PRIVATE rapidjson)
 target_compile_features(bind_capture_test PRIVATE cxx_std_23)
 target_include_directories(bind_capture_test PRIVATE src/mcp src/game_data)
 
@@ -331,6 +345,7 @@ add_test(NAME action_data_test COMMAND action_data_test)
 add_test(NAME action_overlay_persistence_test COMMAND action_overlay_persistence_test)
 add_test(NAME art_overlay_json_test COMMAND art_overlay_json_test)
 add_test(NAME bind_capture_test COMMAND bind_capture_test)
+add_test(NAME gamepad_binding_test COMMAND gamepad_binding_test)
 add_test(NAME action_overlay_json_test COMMAND action_overlay_json_test)
 endif()
 

@@ -227,6 +227,15 @@ namespace SpellHotbar::Storage {
             }
         }
 
+        if (a_intfc->OpenRecord('GPCB', Input::gamepad_record_version)) {
+            const auto bytes = Input::encode_gamepad_bindings(Input::collect_gamepad_combinations());
+            if (bytes.empty() || !a_intfc->WriteRecordData(bytes.data(), static_cast<uint32_t>(bytes.size()))) {
+                logger::error("Failed to store gamepad combinations");
+            }
+        } else {
+            logger::error("Could not store gamepad combinations");
+        }
+
         for (const auto& [k, v]: SpellHotbar::Bars::hotbars)
         {
             v.serialize(a_intfc, k);
@@ -243,6 +252,16 @@ namespace SpellHotbar::Storage {
             } else {
                 logger::info("Saved {} ability bind(s)", art_binds.size());
             }
+        }
+
+        // Independent, optional presentation record: legacy HOTB/keybind bytes stay intact.
+        if (a_intfc->OpenRecord('CLBL', GameData::controller_label_record_version)) {
+            const auto style = static_cast<std::uint8_t>(GameData::get_controller_label_style());
+            if (!a_intfc->WriteRecordData(&style, sizeof(style))) {
+                logger::error("Failed to write controller labels");
+            }
+        } else {
+            logger::error("Could not store controller labels");
         }
 
         // Save GameData values
@@ -303,6 +322,8 @@ namespace SpellHotbar::Storage {
         uint32_t type{0};
         uint32_t version{0};
         uint32_t length{0};
+        std::vector<Input::GamepadBindingRecord> gamepad_combinations;
+        bool invalid_gamepad_record = false;
         while (a_intfc->GetNextRecordInfo(type, version, length)) {
 #ifdef  DEBUG_LOG_SERIALIZATION
             logger::info("Loading {}, version {} with length {}", type, version, length);
@@ -685,6 +706,27 @@ namespace SpellHotbar::Storage {
                 }
                 //}
             }
+            else if (type == 'CLBL') {
+                std::uint8_t value = 0;
+                if (version == GameData::controller_label_record_version && length == 1 &&
+                    a_intfc->ReadRecordData(&value, sizeof(value)) == sizeof(value)) {
+                    GameData::set_controller_label_style(GameData::read_controller_labels_record(version, length, value));
+                } else {
+                    GameData::set_controller_label_style(GameData::ControllerLabelStyle::xbox);
+                    logger::warn("Invalid controller-label record; using Xbox labels");
+                }
+            }
+            else if (type == 'GPCB') {
+                if (version != Input::gamepad_record_version || length > Input::max_gamepad_record_bytes) {
+                    invalid_gamepad_record = true;
+                } else {
+                    std::vector<uint8_t> bytes(length);
+                    if (a_intfc->ReadRecordData(bytes.data(), length) != length ||
+                        !Input::decode_gamepad_bindings(bytes, gamepad_combinations)) {
+                        invalid_gamepad_record = true;
+                    }
+                }
+            }
             else if (type =='GDAT')
             {
                 logger::trace("Reading 'GDAT' data from save...");
@@ -735,6 +777,18 @@ namespace SpellHotbar::Storage {
 
         }
 
+        // Apply after HOTB regardless of record order. Invalid combination metadata must not
+        // quietly turn a chord into a bare gameplay button.
+        if (invalid_gamepad_record) {
+            for (int id = 0; id < Input::keybind_id::num_keys; ++id) {
+                if (Input::is_gamepad_button(Input::get_keybind(id))) { Input::rebind_key(id, -1, false); }
+            }
+            logger::error("Invalid gamepad combination record; gamepad bindings disabled for this load");
+        } else {
+            for (const auto& row : gamepad_combinations) {
+                Input::rebind_gamepad_combination(row.id, row.binding, false);
+            }
+        }
         RenderManager::on_game_load();
     }
 

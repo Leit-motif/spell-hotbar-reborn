@@ -222,23 +222,16 @@ namespace SpellHotbar::FlickUi::BarDrag {
         }
 
         // One empty slot frame plus its key, as Hotbar::draw_single_skill paints an empty slot.
-        void draw_preview_slot(ImVec2 a_pos, float a_size, int a_slot)
+        void draw_preview_slot(ImVec2 a_pos, float a_size, int a_slot, bool a_inset = false)
         {
             draw_default_icon_at(GameData::DefaultIconType::BAR_EMPTY, a_pos, a_size);
 
             const int key_id = slot_keybind_id(a_slot);
-            if (!Bars::use_keybind_icons()) {
-                const std::string key_text = GameData::get_keybind_text(key_id, key_modifier::none);
-                text_at(ImVec2(a_pos.x + a_size * 0.05f, a_pos.y + a_size * 0.0125f), col_white, key_text.c_str());
-            }
-            else {
-                const auto [icon_main, icon_mod] = GameData::get_keybind_icon_index(key_id, key_modifier::none);
-                const float key_h = a_size * 0.35f;
-                const float len = key_icons_length(icon_main, icon_mod);
-                draw_key_icons_at(ImVec2(a_pos.x + a_size * 0.5f - key_h * len * 0.5f,
-                                         a_pos.y + a_size * keybind_icon_pos_factor),
-                                  icon_main, icon_mod, key_h);
-            }
+            const bool icons = Bars::use_keybind_icons();
+            binding_prompt_at(ImVec2(a_pos.x + a_size * 0.03f,
+                icons ? a_pos.y + a_size * (a_inset ? 0.15f : 0.80f) : a_pos.y + a_size * 0.0125f),
+                col_white, key_id, key_modifier::none, a_size * 0.94f,
+                icons ? a_size * 0.85f : a_size * 0.65f, a_size * 0.50f, icons, a_inset ? 0.0f : a_size * 0.75f);
         }
 
         // The grid, circle or cross the HUD bar lays its slots out in.
@@ -255,7 +248,7 @@ namespace SpellHotbar::FlickUi::BarDrag {
                 const ImVec2 center(top.x + cc - a_m.inner.x - a_m.padding.x, top.y + cc);
                 ImVec2 offset(0.0f, -(Bars::bar_circle_radius + 0.5f) * slot);
                 for (int i = 0; i < a_p.barsize; i++) {
-                    draw_preview_slot(ImVec2(center.x + offset.x, center.y + offset.y), slot, i);
+                    draw_preview_slot(ImVec2(center.x + offset.x, center.y + offset.y), slot, i, true);
                     offset = ImVec2(offset.x * c - offset.y * s, offset.x * s + offset.y * c);
                 }
                 return;
@@ -275,7 +268,7 @@ namespace SpellHotbar::FlickUi::BarDrag {
                         }
                         draw_preview_slot(ImVec2(base_x + static_cast<float>(a_col) * step_x,
                                                  top.y + static_cast<float>(a_row) * step_y),
-                                          slot, a_index);
+                                          slot, a_index, true);
                     };
                     cell(1, 0, ind);
                     cell(0, 1, ind + 1);
@@ -286,7 +279,7 @@ namespace SpellHotbar::FlickUi::BarDrag {
             }
 
             const float row_step = slot + a_m.spacing.y +
-                                   (Bars::use_keybind_icons() ? slot * 0.35f * keybind_icon_pos_factor : 0.0f);
+                                   (Bars::use_keybind_icons() ? slot * 0.65f : 0.0f);
             for (int i = 0; i < a_p.barsize; i++) {
                 const int col = i % a_p.row_len;
                 const int row = i / a_p.row_len;

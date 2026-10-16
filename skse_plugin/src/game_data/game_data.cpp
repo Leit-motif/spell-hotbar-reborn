@@ -137,6 +137,25 @@ namespace SpellHotbar::GameData {
     std::unordered_map<RE::FormID, Transformation_data> custom_transformation_data;
 
     std::unordered_map<int, Key_Data> key_names;
+    std::unordered_map<int, Key_Data> playstation_key_names;
+    std::unordered_map<int, Key_Data> steam_key_names;
+    namespace { ControllerLabelStyle label_style = ControllerLabelStyle::xbox; }
+
+    ControllerLabelStyle get_controller_label_style() { return label_style; }
+    void set_controller_label_style(ControllerLabelStyle style)
+    {
+        label_style = controller_label_style(static_cast<int>(style));
+    }
+    const Key_Data& get_key_name(int code)
+    {
+        return select_controller_key_name(key_names, playstation_key_names, steam_key_names, label_style, code);
+    }
+
+    bool controller_key_icons_available()
+    {
+        const auto& table = controller_key_table(key_names, playstation_key_names, steam_key_names, label_style);
+        return std::all_of(table.begin(), table.end(), [](const auto& row) { return row.second.texture_index >= 0; });
+    }
 
     std::unordered_map<int, std::string> animation_names;
 
@@ -607,13 +626,13 @@ namespace SpellHotbar::GameData {
         std::string key_text;
         switch (mod) {
         case SpellHotbar::key_modifier::ctrl:
-            key_text = translate("$KEY_MOD") + " [" + key_names.at(Input::mod_1.get_dx_scancode()).short_text + "]";
+            key_text = translate("$KEY_MOD") + " [" + get_key_name(Input::mod_1.get_dx_scancode()).short_text + "]";
             break;
         case SpellHotbar::key_modifier::shift:
-            key_text = translate("$KEY_MOD") + " [" +key_names.at(Input::mod_2.get_dx_scancode()).short_text + "]";
+            key_text = translate("$KEY_MOD") + " [" +get_key_name(Input::mod_2.get_dx_scancode()).short_text + "]";
             break;
         case SpellHotbar::key_modifier::alt:
-            key_text = translate("$KEY_MOD") + " [" +key_names.at(Input::mod_3.get_dx_scancode()).short_text + "]";
+            key_text = translate("$KEY_MOD") + " [" +get_key_name(Input::mod_3.get_dx_scancode()).short_text + "]";
             break;
         default:
             key_text= translate("$KEY_NO_MOD");
@@ -626,13 +645,13 @@ namespace SpellHotbar::GameData {
         std::string key_text;
         switch (mod) {
         case SpellHotbar::key_modifier::ctrl:
-            key_text = translate("$KEY_MOD") + " [" + key_names.at(Input::mod_1.get_dx_scancode()).long_text + "]";
+            key_text = translate("$KEY_MOD") + " [" + get_key_name(Input::mod_1.get_dx_scancode()).long_text + "]";
             break;
         case SpellHotbar::key_modifier::shift:
-            key_text = translate("$KEY_MOD") + " [" + key_names.at(Input::mod_2.get_dx_scancode()).long_text + "]";
+            key_text = translate("$KEY_MOD") + " [" + get_key_name(Input::mod_2.get_dx_scancode()).long_text + "]";
             break;
         case SpellHotbar::key_modifier::alt:
-            key_text = translate("$KEY_MOD") + " [" + key_names.at(Input::mod_3.get_dx_scancode()).long_text + "]";
+            key_text = translate("$KEY_MOD") + " [" + get_key_name(Input::mod_3.get_dx_scancode()).long_text + "]";
             break;
         default:
             key_text = translate("$KEY_NO_MOD");
@@ -647,7 +666,7 @@ namespace SpellHotbar::GameData {
             return translate("$KEY_UNBOUND");
         }
         if (key_names.contains(code)) {
-            return key_names.at(code).long_text;
+            return get_key_name(code).long_text;
         }
         return "Unknown Key";
     }
@@ -756,23 +775,29 @@ namespace SpellHotbar::GameData {
         }
     }
 
+    std::string get_binding_text(int keybind_id)
+    {
+        return format_controller_binding(Input::get_keybind(keybind_id), Input::get_gamepad_modifiers(keybind_id),
+            [](int code) { return get_key_text_long(code); });
+    }
+
     std::string get_keybind_text(int slot_index, key_modifier mod)
     {
         int keybind = get_spell_keybind(slot_index);
 
         std::string key_text;
         if (key_names.contains(keybind)) {
-            key_text = key_names.at(keybind).long_text;
+            key_text = Input::get_gamepad_modifiers(slot_index) ? get_binding_text(slot_index) : get_key_name(keybind).long_text;
 
             switch (mod) {
                 case SpellHotbar::key_modifier::ctrl:
-                    key_text = key_names.at(Input::mod_1.get_dx_scancode()).short_text + "-" + key_text;
+                    key_text = get_key_name(Input::mod_1.get_dx_scancode()).short_text + "-" + key_text;
                     break;
                 case SpellHotbar::key_modifier::shift:
-                    key_text = key_names.at(Input::mod_2.get_dx_scancode()).short_text + "-" + key_text;
+                    key_text = get_key_name(Input::mod_2.get_dx_scancode()).short_text + "-" + key_text;
                     break;
                 case SpellHotbar::key_modifier::alt:
-                    key_text = key_names.at(Input::mod_3.get_dx_scancode()).short_text + "-" + key_text;
+                    key_text = get_key_name(Input::mod_3.get_dx_scancode()).short_text + "-" + key_text;
                     break;
                 default:
                     break;
@@ -791,17 +816,17 @@ namespace SpellHotbar::GameData {
         int keybind = get_spell_keybind(slot_index);
 
         if (key_names.contains(keybind)) {
-            icon_main = key_names.at(keybind).texture_index;
+            icon_main = get_key_name(keybind).texture_index;
 
             switch (mod) {
             case SpellHotbar::key_modifier::ctrl:
-                icon_mod = key_names.at(Input::mod_1.get_dx_scancode()).texture_index;
+                icon_mod = get_key_name(Input::mod_1.get_dx_scancode()).texture_index;
                 break;
             case SpellHotbar::key_modifier::shift:
-                icon_mod = key_names.at(Input::mod_2.get_dx_scancode()).texture_index;
+                icon_mod = get_key_name(Input::mod_2.get_dx_scancode()).texture_index;
                 break;
             case SpellHotbar::key_modifier::alt:
-                icon_mod = key_names.at(Input::mod_3.get_dx_scancode()).texture_index;
+                icon_mod = get_key_name(Input::mod_3.get_dx_scancode()).texture_index;
                 break;
             default:
                 break;
@@ -809,6 +834,22 @@ namespace SpellHotbar::GameData {
 
         }
         return std::make_tuple(icon_main, icon_mod);
+    }
+
+    std::vector<int> get_binding_icon_indices(int keybind_id, key_modifier mod)
+    {
+        int button = Input::get_keybind(keybind_id);
+        if (keybind_id >= Input::keybind_id::num_keys) { button = get_spell_keybind(keybind_id); }
+        if (button <= 0) { return {}; }
+        auto keys = controller_binding_keys(button, Input::get_gamepad_modifiers(keybind_id));
+        if (mod == key_modifier::ctrl) { keys.insert(keys.begin(), Input::mod_1.get_dx_scancode()); }
+        else if (mod == key_modifier::shift) { keys.insert(keys.begin(), Input::mod_2.get_dx_scancode()); }
+        else if (mod == key_modifier::alt) { keys.insert(keys.begin(), Input::mod_3.get_dx_scancode()); }
+        std::vector<int> indices;
+        for (int code : keys) {
+            indices.push_back(key_names.contains(code) ? get_key_name(code).texture_index : -1);
+        }
+        return indices;
     }
 
     // A left-held staff is invisible to the right-hand walk below, so without this check it
@@ -1243,6 +1284,7 @@ namespace SpellHotbar::GameData {
         user_spell_cast_info.clear();
         user_custom_entry_info.clear();
         oblivion_bar.clear();
+        set_controller_label_style(ControllerLabelStyle::xbox);
         potion_gcd = 1.0f;
         spell_gcd = 1.5f;
         individual_shout_cooldowns = false;

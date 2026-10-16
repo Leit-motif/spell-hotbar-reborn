@@ -5,6 +5,7 @@
 #include "user_custom_spelldata.h"
 #include "../bar/oblivion_bar.h"
 #include "equipped_type.h"
+#include "controller_labels.h"
 #include "art_definition.h"
 #include "action_definition.h"
 #include <optional>
@@ -186,6 +187,12 @@ namespace SpellHotbar::GameData {
     extern std::vector<std::tuple<RE::BGSArtObject*, RE::BGSArtObject*, const std::string>> spell_casteffect_art;
 
     extern std::unordered_map<int, Key_Data> key_names;
+    extern std::unordered_map<int, Key_Data> playstation_key_names;
+    extern std::unordered_map<int, Key_Data> steam_key_names;
+    bool controller_key_icons_available();
+    ControllerLabelStyle get_controller_label_style();
+    void set_controller_label_style(ControllerLabelStyle style);
+    const Key_Data& get_key_name(int code);
 
     extern std::unordered_map<int, std::string> animation_names;
 
@@ -229,7 +236,9 @@ namespace SpellHotbar::GameData {
     int get_spell_keybind(int slot_index);
 
     std::string get_keybind_text(int slot_index, key_modifier mod);
+    std::string get_binding_text(int keybind_id);
     std::tuple<int,int> get_keybind_icon_index(int slot_index, key_modifier mod);
+    std::vector<int> get_binding_icon_indices(int keybind_id, key_modifier mod);
 
     inline RE::TESForm* get_form_from_file(const uint32_t formID, const std::string_view& pluginFile)
     {

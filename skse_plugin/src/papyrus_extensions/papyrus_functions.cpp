@@ -18,12 +18,26 @@ void dispatch_slot_input(RE::StaticFunctionTag*, int slot_index, bool down)
     SKSE::GetTaskInterface()->AddTask([slot_index, down]() {
         using namespace SpellHotbar;
         if (slot_index < 0 || slot_index >= static_cast<int>(Input::key_spells.size())) return;
-        const auto [device, key] = Input::dx_scan_code_to_input(Input::key_spells[slot_index].get_dx_scancode());
-        if (device == RE::INPUT_DEVICE::kNone) return;
-        auto* event = RE::ButtonEvent::Create(device, ""sv, key, down ? 1.0f : 0.0f, down ? 0.0f : 0.2f);
-        if (!event) return;
-        Input::dispatch_test_event(event);
-        delete event;
+        const auto& binding = Input::key_spells[slot_index];
+        const auto send = [slot_index, down](int code, const char* role) {
+            auto* event = Input::button_event_from_dx_scancode(code, down ? 1.0f : 0.0f, down ? 0.0f : 0.2f);
+            if (!event) { return; }
+            const bool forwarded = Input::dispatch_test_event(event);
+            logger::info("SH2 input QA: slot={} role={} code={} down={} forwarded={}", slot_index, role, code, down, forwarded);
+            delete event;
+        };
+        const auto modifiers = binding.gamepad_modifiers();
+        if (down) {
+            for (int code = Input::gamepad_first; code < Input::gamepad_first + Input::gamepad_count; ++code) {
+                if (modifiers & Input::gamepad_bit(code)) { send(code, "modifier"); }
+            }
+        }
+        send(binding.get_dx_scancode(), "final");
+        if (!down) {
+            for (int code = Input::gamepad_first + Input::gamepad_count - 1; code >= Input::gamepad_first; --code) {
+                if (modifiers & Input::gamepad_bit(code)) { send(code, "modifier"); }
+            }
+        }
     });
 }
 

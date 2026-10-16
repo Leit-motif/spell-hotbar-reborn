@@ -22,6 +22,7 @@
 #include <algorithm>
 
 #include "../../third_party/flick/FUCK_API.h"
+#include "ui/widgets.h"
 
 namespace SpellHotbar::Flick {
     namespace {
@@ -229,11 +230,22 @@ namespace SpellHotbar::Flick {
                                    ImVec2(img.u0, img.v0), ImVec2(img.u1, img.v1), unpack(img.col));
                 }
 
+                for (const BindingPrompt& p : frame.prompts) {
+                    FlickUi::binding_prompt_at(ImVec2(origin.x + p.x, origin.y + p.y), p.col,
+                        p.keybind, static_cast<key_modifier>(p.modifier), p.width, p.height, p.glyph_height, p.icons);
+                }
+
                 // FLICK's C-ABI has no draw-list text, so text is laid out: park the cursor and
                 // emit. The Dummy below restores the layout extent afterwards.
                 FUCK::PushFont(font, text_px);
                 for (const DockText& t : frame.texts) {
                     ImVec2 at(origin.x + t.x, origin.y + t.y);
+                    if (t.max_width > 0.0f) {
+                        if (t.px > 0.0f) { FUCK::PushFont(font, t.px); }
+                        FlickUi::key_label_at(at, t.col, t.text, t.max_width, t.max_height);
+                        if (t.px > 0.0f) { FUCK::PopFont(); }
+                        continue;
+                    }
                     if (t.anchor != 0) {
                         const ImVec2 sz = FUCK::CalcTextSize(t.text.c_str());
                         at.x -= sz.x;

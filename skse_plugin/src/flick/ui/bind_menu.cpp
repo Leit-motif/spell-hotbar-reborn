@@ -1114,9 +1114,10 @@ namespace SpellHotbar::FlickUi::BindMenu {
             const key_modifier mod = static_cast<key_modifier>(modifier_index);
 
             float key_icon_length{ 0.0f };
-            if (Bars::use_keybind_icons()) {
-                //Check for longest button combo
-                for (int i = 0; i < bar_sel.get_bar_size(); i++) {
+            bool has_gamepad_combinations{ false };
+            for (int i = 0; i < bar_sel.get_bar_size(); i++) {
+                has_gamepad_combinations |= Input::get_gamepad_modifiers(i) != 0;
+                if (Bars::use_keybind_icons()) {
                     auto [tex_id_key, _tex_id_mod] = GameData::get_keybind_icon_index(i, mod);
                     const float cur_len = key_icons_length(tex_id_key, -1);
                     if (cur_len > key_icon_length) {
@@ -1125,9 +1126,15 @@ namespace SpellHotbar::FlickUi::BindMenu {
                 }
             }
             const float key_icon_size = icon_size * 2.0f / 3.0f;
+            const float key_column_width = has_gamepad_combinations ?
+                std::max(icon_size * 2.8f, key_icon_size * key_icon_length) :
+                std::max(key_icon_size * key_icon_length - item_spacing.x, 1.0f);
 
             for (int i = 0; i < bar_sel.get_bar_size(); i++) {
                 auto [skill, inherited] = bar_sel.get_skill_in_bar_with_inheritance(i, mod, false);
+                const ImVec2 row_start = FUCK::GetCursorScreenPos();
+                const bool triangle = Bars::use_keybind_icons() && GameData::get_binding_icon_indices(i, mod).size() == 3;
+                const float row_height = triangle ? std::max(icon_size, key_icon_size * 2.08f) : icon_size;
 
                 // Recomputed here every frame against the bar the dropdown currently selects, and
                 // read by the icon, the keybind label and the name below, so all three say the same
@@ -1156,14 +1163,12 @@ namespace SpellHotbar::FlickUi::BindMenu {
                     count = GameData::count_item_in_inv(skill.formID);
                 }
 
-                if (Bars::use_keybind_icons()) {
-                    //Draw keybind buttons
+                if (has_gamepad_combinations || Bars::use_keybind_icons()) {
                     ImVec2 icon_pos = FUCK::GetCursorScreenPos();
-                    auto [tex_id_key, _tex_id_mod] = GameData::get_keybind_icon_index(i, mod);
-                    icon_pos.y += icon_size * 1.0f / 6.0f;
-                    FUCK::Dummy(ImVec2(std::max(key_icon_size * key_icon_length - item_spacing.x, 1.0f), icon_size));
+                    FUCK::Dummy(ImVec2(key_column_width, row_height));
                     FUCK::SameLine();
-                    draw_key_icons_at(icon_pos, tex_id_key, -1, key_icon_size, slot_text_col);
+                    binding_prompt_at(icon_pos, slot_text_col, i, mod,
+                        key_column_width, row_height, key_icon_size, Bars::use_keybind_icons());
                 }
 
                 const ImVec2 bpos = FUCK::GetCursorScreenPos();
@@ -1330,9 +1335,9 @@ namespace SpellHotbar::FlickUi::BindMenu {
                 const std::string text = GameData::resolve_slot_name(skill);
                 FUCK::TextColored(FlickImages::unpack(slot_text_col), "%s", text.c_str());
 
-                if (!Bars::use_keybind_icons()) {
+                if (!has_gamepad_combinations && !Bars::use_keybind_icons()) {
                     const std::string key_text = GameData::get_keybind_text(i, mod);
-                    text_at(ImVec2(bpos.x + text_offset_x, bpos.y + text_offset_y), slot_text_col, key_text.c_str());
+                    key_label_at(ImVec2(bpos.x + text_offset_x, bpos.y + text_offset_y), slot_text_col, key_text, icon_size * 0.70f, icon_size * 0.65f);
                 }
 
                 if (skill.hand == hand_mode::left_hand || skill.hand == hand_mode::right_hand || skill.hand == hand_mode::dual_hand) {
@@ -1355,10 +1360,12 @@ namespace SpellHotbar::FlickUi::BindMenu {
                     const ImVec2 textsize = FUCK::CalcTextSize(count_text.c_str());
                     text_at(ImVec2(bpos.x + icon_size - textsize.x, bpos.y + icon_size - textsize.y), col_white, count_text.c_str());
                 }
+                FUCK::SetCursorScreenPos(ImVec2(row_start.x, row_start.y + row_height));
+                FUCK::Dummy(ImVec2(0.0f, 0.0f));
             }
 
-            if (Bars::use_keybind_icons()) {
-                FUCK::Dummy(ImVec2(std::max(key_icon_size * key_icon_length - item_spacing.x, 1.0f), icon_size));
+            if (has_gamepad_combinations || Bars::use_keybind_icons()) {
+                FUCK::Dummy(ImVec2(key_column_width, icon_size));
                 FUCK::SameLine();
             }
 

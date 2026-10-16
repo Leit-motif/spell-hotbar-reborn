@@ -118,7 +118,7 @@ namespace SpellHotbar::Bars {
 
     bool use_keybind_icons()
     {
-        return _use_keybind_icons && GameData::key_icons_available;
+        return _use_keybind_icons && GameData::key_icons_available && GameData::controller_key_icons_available();
     }
 
     bool toggle_use_keyind_icons()

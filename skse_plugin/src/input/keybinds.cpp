@@ -40,8 +40,80 @@ namespace SpellHotbar::Input {
 	KeyModifier mod_alt(RE::INPUT_DEVICE::kKeyboard, 56, 184);  //fixed modifier, used for gui
 	//KeyModifier mod_shift(RE::INPUT_DEVICE::kKeyboard, 42, 54);  //fixed modifier, used for gui
 
-	inline void _check_unbind(KeyBind & bind, int code) {
-		if (bind.get_dx_scancode() == code) {
+	namespace {
+		GamepadPresses gamepad_presses;
+
+		KeyBind* binding_for_id(int id)
+		{
+			if (id >= spell_1 && id <= spell_12) { return &key_spells[id]; }
+			switch (id) {
+			case ui_next: return &key_next;
+			case ui_prev: return &key_prev;
+			case oblivion_cast: return &key_oblivion_cast;
+			case oblivion_potion: return &key_oblivion_potion;
+			case open_advanced_bind_menu: return &key_open_advanced_bind_menu;
+			default: return nullptr; // Bar modifiers themselves remain single buttons.
+			}
+		}
+	}
+
+	std::uint16_t get_gamepad_modifiers(int slot)
+	{
+		const auto* binding = binding_for_id(slot);
+		return binding ? binding->gamepad_modifiers() : 0;
+	}
+
+	void begin_gamepad_frame() { gamepad_presses.begin_frame(); }
+
+	void update_gamepad_holds()
+	{
+		for (int id = 0; id < num_keys; ++id) {
+			if (auto* binding = binding_for_id(id); binding && is_gamepad_button(binding->get_dx_scancode())) {
+				binding->set_synthetic_down(gamepad_presses.binding_held(id));
+			}
+		}
+	}
+
+	bool observe_gamepad_button(RE::InputEvent* event, int code, bool down, bool pressed, bool allow_start)
+	{
+		std::array<GamepadBinding, num_keys> bindings{};
+		for (int id = 0; id < num_keys; ++id) {
+			if (const auto* binding = binding_for_id(id)) {
+				bindings[id] = { binding->get_dx_scancode(), binding->gamepad_modifiers() };
+			}
+		}
+		const bool capture = gamepad_presses.raw(reinterpret_cast<std::uintptr_t>(event), code, down, pressed, bindings, allow_start);
+		update_gamepad_holds();
+		return capture;
+	}
+
+	void filter_gamepad_button(RE::InputEvent* event, bool down, bool pressed)
+	{
+		gamepad_presses.filtered(reinterpret_cast<std::uintptr_t>(event), down, pressed);
+		update_gamepad_holds();
+	}
+
+	bool gamepad_event_matches(const KeyBind* binding)
+	{
+		return gamepad_presses.binding_id() >= 0 && binding_for_id(gamepad_presses.binding_id()) == binding;
+	}
+	bool gamepad_event_consumed() { return gamepad_presses.consumed(); }
+	void consume_gamepad_final() { gamepad_presses.consume(); }
+	std::uint16_t held_gamepad_buttons() { return gamepad_presses.held(); }
+
+	std::vector<GamepadBindingRecord> collect_gamepad_combinations()
+	{
+		std::vector<GamepadBindingRecord> rows;
+		for (int id = 0; id < num_keys; ++id) {
+			if (const auto* binding = binding_for_id(id); binding && binding->gamepad_modifiers()) {
+				rows.push_back({ static_cast<std::uint8_t>(id), { binding->get_dx_scancode(), binding->gamepad_modifiers() } });
+			}
+		}
+		return rows;
+	}
+
+	inline void _check_unbind(KeyBind & bind, int code, std::uint16_t modifiers) {
+		if (bind.get_dx_scancode() == code && bind.gamepad_modifiers() == modifiers) {
 			bind.unbind();
 		}
 	}
@@ -52,22 +124,39 @@ namespace SpellHotbar::Input {
 		}
 	}
 
-	void unbind_if_already_used(int code) {
+	void unbind_if_already_used(int code, std::uint16_t modifiers = 0) {
 		//check remove binds if already used
 		for (size_t i = 0Ui64; i < key_spells.size(); ++i) {
-			_check_unbind(key_spells[i], code);
+			if (key_spells[i].get_dx_scancode() == code && key_spells[i].gamepad_modifiers() == modifiers) { gamepad_presses.cancel_binding(static_cast<int>(i)); }
+			_check_unbind(key_spells[i], code, modifiers);
 		}
-		_check_unbind(key_next, code);
-		_check_unbind(key_prev, code);
+		_check_unbind(key_next, code, modifiers);
+		_check_unbind(key_prev, code, modifiers);
+		_check_unbind(key_oblivion_cast, code, modifiers);
+		_check_unbind(key_oblivion_potion, code, modifiers);
+		_check_unbind(key_open_advanced_bind_menu, code, modifiers);
+		if (modifiers != 0) { return; }
 		_check_unbind(mod_1, code);
 		_check_unbind(mod_2, code);
 		_check_unbind(mod_3, code);
 		_check_unbind(mod_show_bar, code);
-		_check_unbind(key_open_advanced_bind_menu, code);
+	}
+
+	bool rebind_gamepad_combination(int slot, GamepadBinding binding, bool check_conflicts)
+	{
+		auto* target = binding_for_id(slot);
+		if (!target || !binding.valid()) { return false; }
+		gamepad_presses.cancel_binding(slot);
+		if (check_conflicts) { unbind_if_already_used(binding.button, binding.modifiers); }
+		target->assign_from_dx_scancode(binding.button);
+		target->set_gamepad_modifiers(binding.modifiers);
+		logger::info("SH2 input: binding {} gamepad final={} modifiers={:04x}", slot, binding.button, binding.modifiers);
+		return true;
 	}
 
 	int rebind_key(int slot, int code, bool check_conflicts)
 	{
+		gamepad_presses.cancel_binding(slot);
 		if (check_conflicts) unbind_if_already_used(code);
 		if (slot >= 0 && slot <= keybind_id::spell_12) {
 			key_spells[slot].assign_from_dx_scancode(code);
@@ -123,6 +212,7 @@ namespace SpellHotbar::Input {
 
 	void reset_keybinds()
 	{
+		gamepad_presses.reset();
 		for (int slot = 0; slot < keybind_id::num_keys; ++slot) {
 			rebind_key(slot, -1, false);
 		}

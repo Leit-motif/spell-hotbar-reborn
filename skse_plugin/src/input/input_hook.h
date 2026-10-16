@@ -13,5 +13,5 @@ namespace SpellHotbar::Input {
     // before every hook install). Call once at kPostLoad, after FLICK's install.
     void install_hook();
     // Developer-only Papyrus seam: exercise the same raw -> host -> filtered pipeline.
-    void dispatch_test_event(RE::InputEvent* event);
+    bool dispatch_test_event(RE::InputEvent* event);
 }

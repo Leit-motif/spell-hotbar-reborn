@@ -26,6 +26,7 @@ namespace SpellHotbar::casts::CastIntent {
 			// Points into Input::key_spells / key_oblivion_*, which are globals: safe to keep.
 			const Input::KeyBind* keybind;
 			int trigger_code{ keybind ? keybind->get_dx_scancode() : -1 };
+			std::uint16_t trigger_modifiers{ keybind ? keybind->gamepad_modifiers() : std::uint16_t{ 0 } };
 			// A GUI transition after admission withdraws a buffered press, even if it closes
 			// again before release. Current open windows never classify new gameplay input.
 			std::uint64_t input_revision{ Flick::input_context_revision() };
@@ -130,6 +131,7 @@ namespace SpellHotbar::casts::CastIntent {
 		bool payload_still_bound(const Payload& p, const SlottedSkill& skill)
 		{
 			return p.keybind && p.keybind->get_dx_scancode() == p.trigger_code &&
+				p.keybind->gamepad_modifiers() == p.trigger_modifiers &&
 				skill.formID == p.formID && skill.type == p.type && skill.hand == p.hand &&
 				   skill.art_id == p.art_id;
 		}

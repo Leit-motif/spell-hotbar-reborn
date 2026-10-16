@@ -76,10 +76,18 @@ namespace SpellHotbar::Flick {
         std::string text;
         unsigned col;
         float px{0.0f};  // font size in pixels; 0 takes the window's default for its kind of text
+        float max_width{0.0f}, max_height{0.0f}; // bounded key labels; 0 leaves other text unbounded
     };
     struct DockSlot {
         float x, y, w, h;
         std::string tooltip;  // shown while the mouse is over this rect; empty shows nothing
+    };
+    struct BindingPrompt {
+        float x, y, width, height, glyph_height;
+        int keybind, modifier;
+        unsigned col;
+        bool icons;
+        float triangle_peak_rise{0.0f};
     };
     struct DockFrame {
         std::string header;  // the bar's name, between the paging arrows
@@ -92,6 +100,7 @@ namespace SpellHotbar::Flick {
         std::vector<DockImage> images;
         std::vector<DockText> texts;
         std::vector<DockSlot> slots;
+        std::vector<BindingPrompt> prompts;
         int anchor{0};  // Bars::anchor_point, as an int so this header stays free of SH2 types
         float offset_x{0.0f}, offset_y{0.0f};
     };
@@ -112,6 +121,7 @@ namespace SpellHotbar::Flick {
         float alpha{1.0f}, text_alpha{1.0f};  // the fades this frame was built with, for the probe log
         std::vector<DockImage> images;
         std::vector<DockText> texts;
+        std::vector<BindingPrompt> prompts;
     };
 
     // True when FLICK is connected and the dock window is registered, i.e. the SMF side should

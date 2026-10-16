@@ -156,6 +156,7 @@ namespace SpellHotbar::Input {
         }
 
         bool action_event_handled = false;
+        bool owned_gamepad_release = false;
 
         // Action targets are an event bridge, so their release must not depend on the current
         // mode, modifier, menu, capture state, or a still-loaded player.  Match the original DX
@@ -166,6 +167,14 @@ namespace SpellHotbar::Input {
                 const auto [key_code, key_device] = get_device_and_input(button_event);
                 const int trigger_dx_scancode = input_to_dx_scancode(
                     key_device, static_cast<uint8_t>(key_code));
+                if (raw && key_device == RE::INPUT_DEVICE::kGamepad) {
+                    const auto& capture = Mcp::bind_capture();
+                    const bool consumed = observe_gamepad_button(event, trigger_dx_scancode,
+                        button_event->IsDown(), button_event->IsPressed(), !capture.armed() && !capture.action_armed());
+                    owned_gamepad_release = consumed && button_event->IsUp();
+                } else if (!raw && key_device == RE::INPUT_DEVICE::kGamepad) {
+                    filter_gamepad_button(event, button_event->IsDown(), button_event->IsPressed());
+                }
                 if (trigger_dx_scancode >= 0) {
                     if (raw && button_event->IsUp()) {
                         action_event_handled = casts::CastingController::release_action_for_trigger(
@@ -184,13 +193,17 @@ namespace SpellHotbar::Input {
         if (!pc || !pc->Is3DLoaded()) {
             // The mirror above already answered this event; forwarding it too would send the
             // source key's own binding an up or repeat the Action already consumed.
-            return InputEventDecision<RE::InputEvent>{ .capture = action_event_handled };
+            return InputEventDecision<RE::InputEvent>{ .capture = action_event_handled || owned_gamepad_release };
         }
 
         RE::InputEvent* addEvent = nullptr;
         auto [shoutKeyDev, shoutKey] = get_shout_key_and_device();
 
-        bool captureEvent = action_event_handled; // Capture this event? (do not forward to Skyrim)
+        bool captureEvent = action_event_handled || owned_gamepad_release;
+        if (owned_gamepad_release && casts::CastingController::is_currently_using_power()) {
+            addEvent = RE::ButtonEvent::Create(shoutKeyDev, "Shout", shoutKey, 0.0f,
+                casts::CastingController::get_current_casttime());
+        }
 
             // SMF runs this callback before TranslateInputEvent. Returning true
             // unlinks the event from the queue, so ImGui never sees the click.
@@ -222,17 +235,25 @@ namespace SpellHotbar::Input {
                         }
                         captureEvent = true;
                     } else if (raw && capture.armed()) {
-                        if (bEvent->IsDown()) {
+                        const int pending_id = capture.pending_id();
+                        if (key_device == RE::INPUT_DEVICE::kGamepad) {
+                            const int dx = input_to_dx_scancode(key_device, static_cast<uint8_t>(key_code));
+                            if (auto binding = capture.apply_gamepad_button(dx, bEvent->IsDown(), bEvent->IsUp(), held_gamepad_buttons())) {
+                                if (supports_gamepad_combination(pending_id)) {
+                                    rebind_gamepad_combination(pending_id, *binding);
+                                } else {
+                                    rebind_key(pending_id, binding->button);
+                                }
+                            }
+                        } else if (bEvent->IsDown()) {
                             const bool is_escape =
                                 key_device == RE::INPUT_DEVICE::kKeyboard && key_code == 1;
                             const bool rebindable =
                                 key_device == RE::INPUT_DEVICE::kKeyboard ||
-                                key_device == RE::INPUT_DEVICE::kMouse ||
-                                key_device == RE::INPUT_DEVICE::kGamepad;
+                                key_device == RE::INPUT_DEVICE::kMouse;
                             if (is_escape) {
                                 capture.apply_down_edge(true);
                             } else if (rebindable) {
-                                const int pending_id = capture.pending_id();
                                 if (capture.apply_down_edge(false) == Mcp::CaptureApply::rebound) {
                                     const int dx = input_to_dx_scancode(
                                         key_device, static_cast<uint8_t>(key_code));
@@ -295,6 +316,7 @@ namespace SpellHotbar::Input {
                             // key that dismissed our UI belongs to us, so take it off the queue.
                             dismiss_key = std::make_pair(key_device, key_code);
                             captureEvent = true;
+                            if (key_device == RE::INPUT_DEVICE::kGamepad) { consume_gamepad_final(); }
                         }
                     }
                     else if (raw && dismiss_key && dismiss_key->first == key_device &&
@@ -389,7 +411,7 @@ namespace SpellHotbar::Input {
                                             if (form) {
                                                 slot_spell(form, i);
                                             }
-                                            if (mod_1.isDown() || mod_2.isDown() || mod_3.isDown()) {
+                                            if (bind.gamepad_modifiers() || mod_1.isDown() || mod_2.isDown() || mod_3.isDown()) {
                                                 //Do not forward keypress to game if modifier was used, this allows easy double binding with modifiers
                                                 captureEvent = true;
                                             }
@@ -434,7 +456,7 @@ namespace SpellHotbar::Input {
                                                 InputModeBase::current_mode->process_key_update(bind, i, bEvent->HeldDuration());
                                             }
                                         }
-                                        if (handled && (mod_1.isDown() || mod_2.isDown() || mod_3.isDown())) {
+                                        if (handled && (bind.gamepad_modifiers() || mod_1.isDown() || mod_2.isDown() || mod_3.isDown())) {
                                             //Do not forward keypress to game if modifier was used, this allows easy double binding with modifiers
                                             captureEvent = true;
                                         } else if (handled && in_ingame_state()) {
@@ -460,6 +482,11 @@ namespace SpellHotbar::Input {
                             bool potion = key_oblivion_potion.matches(key_code, key_device);
                             if (cast || potion)
                             {
+                                if ((cast && key_oblivion_cast.gamepad_modifiers()) ||
+                                    (potion && key_oblivion_potion.gamepad_modifiers())) {
+                                    handled = true;
+                                    captureEvent = true;
+                                }
                                 if (bEvent->IsDown()) {
                                     size_t index = keybind_id::oblivion_potion;
                                     if (cast) {
@@ -497,6 +524,7 @@ namespace SpellHotbar::Input {
                                 Bars::menu_bar_id = Bars::getPreviousMenuBar(Bars::menu_bar_id);
                                 RE::PlaySound(sound_UISkillsBackward);
                             }
+                            if (handled && key_device == RE::INPUT_DEVICE::kGamepad) { captureEvent = true; }
                         }
 
                     }
@@ -505,6 +533,12 @@ namespace SpellHotbar::Input {
                 }
             }
 
+        if (event->eventType == RE::INPUT_EVENT_TYPE::kButton && event->GetDevice() == RE::INPUT_DEVICE::kGamepad) {
+            // Once accepted, this final button remains ours through repeat/up even if its
+            // modifiers, menu, binding or casting context change. Never consume prefix buttons.
+            if (!raw && gamepad_event_consumed()) { captureEvent = true; }
+            if (captureEvent && !raw) { consume_gamepad_final(); }
+        }
         return InputEventDecision<RE::InputEvent>{ .capture = captureEvent, .injected = addEvent };
     }
 
@@ -587,7 +621,8 @@ namespace SpellHotbar::Input {
 
     bool KeyBind::matches(uint32_t key_code, RE::INPUT_DEVICE key_device) const
     {
-        return key_device == input_device && key_code == keycode;
+        return key_device == input_device && key_code == keycode &&
+            (key_device != RE::INPUT_DEVICE::kGamepad || gamepad_event_matches(this));
     }
 
     int KeyBind::get_dx_scancode() const
@@ -601,11 +636,12 @@ namespace SpellHotbar::Input {
         input_device = dev;
         keycode = key;
         m_isDown = false;
+        gamepad_modifiers_ = 0;
     }
 
     void KeyBind::update(uint32_t key_code, RE::INPUT_DEVICE key_device, bool is_pressed)
     {
-        if (matches(key_code, key_device)) {
+        if (key_device != RE::INPUT_DEVICE::kGamepad && matches(key_code, key_device)) {
             m_isDown = is_pressed;
         }
     }
@@ -615,6 +651,7 @@ namespace SpellHotbar::Input {
         input_device = RE::INPUT_DEVICE::kNone;
         keycode = 0Ui8;
         m_isDown = false;
+        gamepad_modifiers_ = 0;
     }
 
     bool in_ingame_state() {
@@ -731,6 +768,19 @@ namespace SpellHotbar::Input {
         }
 
     }  // namespace
+
+    RE::ButtonEvent* button_event_from_dx_scancode(int code, float value, float held_duration)
+    {
+        const auto [device, button] = dx_scan_code_to_input(code);
+        if (device == RE::INPUT_DEVICE::kNone) { return nullptr; }
+        uint32_t event_code = button;
+        if (device == RE::INPUT_DEVICE::kGamepad) {
+            const auto mapped = gamepad_event_code(button);
+            if (!mapped) { return nullptr; }
+            event_code = *mapped;
+        }
+        return RE::ButtonEvent::Create(device, ""sv, event_code, value, held_duration);
+    }
 
     // Actions mirror mod hotkeys, so an empty name is the ordinary answer: a mod hotkey is not in
     // the engine's controlmap and has no user-event name to carry. Measured live, every target

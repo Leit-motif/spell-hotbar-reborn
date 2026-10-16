@@ -84,6 +84,12 @@ namespace SpellHotbar::Storage::IO {
         
         logger::trace("Loading profile from json...");
 
+        std::vector<Input::GamepadBindingRecord> combinations;
+        if (!Input::read_gamepad_bindings_json(d, combinations)) {
+            logger::error("Preset contains invalid gamepad combinations; settings were not changed");
+            return false;
+        }
+
         for (int i = 0; i < static_cast<int>(max_bar_size); i++) {
             int keycode = get_int_or_default(d, "keybind." + std::to_string(i), -1);
             Input::rebind_key(i, keycode, false);
@@ -102,6 +108,7 @@ namespace SpellHotbar::Storage::IO {
         Input::rebind_key(Input::keybind_id::oblivion_potion, get_int_or_default(d, "keybind.oblivion_mode.potion", -1), false);
         Input::rebind_key(Input::keybind_id::oblivion_show_bar_mod, get_int_or_default(d, "keybind.oblivion_mode.modifier_show_bar", -1), false);
         Input::rebind_key(Input::keybind_id::open_advanced_bind_menu, get_int_or_default(d, "keybind.open_advanced_bind_menu", 46), false); //46 = C
+        for (const auto& row : combinations) { Input::rebind_gamepad_combination(row.id, row.binding, false); }
 
         Bars::disable_non_modifier_bar = get_int_or_default(d, "settings.disable_non_mod_bar", 0) != 0;
 
@@ -128,6 +135,7 @@ namespace SpellHotbar::Storage::IO {
         Bars::disable_menu_binding = get_int_or_default(d, "settings.disable_menu_binding", 0) != 0;
         Bars::disable_non_modifier_bar = get_int_or_default(d, "settings.disable_non_mod_bar", 0) != 0;
         Bars::set_use_keybind_icons(get_int_or_default(d, "settings.use_key_icons", 0) != 0);
+        GameData::set_controller_label_style(GameData::read_controller_labels_json(d));
 
         GameData::potion_gcd = get_float_or_default(d, "settings.potion_gcd", 1.0f);
         GameData::spell_gcd = std::clamp(get_float_or_default(d, "settings.spell_gcd", 1.5f), 0.1f, 10.0f);
@@ -301,6 +309,7 @@ namespace SpellHotbar::Storage::IO {
         add_int(d, "keybind.oblivion_mode.potion", Input::get_keybind(Input::keybind_id::oblivion_potion));
         add_int(d, "keybind.oblivion_mode.modifier_show_bar", Input::get_keybind(Input::keybind_id::oblivion_show_bar_mod));
         add_int(d, "keybind.open_advanced_bind_menu", Input::get_keybind(Input::keybind_id::open_advanced_bind_menu));
+        Input::write_gamepad_bindings_json(d, Input::collect_gamepad_combinations());
 
         add_int(d, "settings.disable_non_mod_bar", Bars::disable_non_modifier_bar ? 1 : 0);
         add_int(d, "settings.number_of_slots", static_cast<int>(Bars::barsize));
@@ -321,6 +330,7 @@ namespace SpellHotbar::Storage::IO {
         add_int(d, "settings.disable_menu_binding", Bars::disable_menu_binding ? 1 : 0);
         add_int(d, "settings.disable_non_mod_bar", Bars::disable_non_modifier_bar ? 1 : 0);
         add_int(d, "settings.use_key_icons", Bars::get_use_keybind_icons() ? 1 : 0);
+        add_int(d, GameData::controller_label_json_key, static_cast<int>(GameData::get_controller_label_style()));
 
         add_float(d, "settings.potion_gcd", GameData::potion_gcd);
         add_float(d, "settings.spell_gcd", GameData::spell_gcd);

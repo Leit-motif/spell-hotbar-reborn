@@ -1,5 +1,6 @@
 #pragma once
 #include "input.h"
+#include "gamepad_binding_io.h"
 
 namespace SpellHotbar::Input {
 
@@ -54,5 +55,15 @@ namespace SpellHotbar::Input {
 
 	int rebind_key(int slot, int code, bool check_conflicts = true);
 	int get_keybind(int slot);
+	std::uint16_t get_gamepad_modifiers(int slot);
+	bool rebind_gamepad_combination(int slot, GamepadBinding binding, bool check_conflicts = true);
+	void begin_gamepad_frame();
+	bool observe_gamepad_button(RE::InputEvent* event, int code, bool down, bool pressed, bool allow_start);
+	void filter_gamepad_button(RE::InputEvent* event, bool down, bool pressed);
+	bool gamepad_event_matches(const KeyBind* binding);
+	bool gamepad_event_consumed();
+	void consume_gamepad_final();
+	std::uint16_t held_gamepad_buttons();
+	std::vector<GamepadBindingRecord> collect_gamepad_combinations();
 	void reset_keybinds();
 }

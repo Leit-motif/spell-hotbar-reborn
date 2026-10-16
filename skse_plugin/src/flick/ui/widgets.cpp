@@ -1,4 +1,7 @@
 #include "widgets.h"
+#include "../../rendering/key_label_layout.h"
+#include "../../rendering/binding_glyph_layout.h"
+#include "../../input/keybinds.h"
 
 #include "../flick_images.h"
 #include "../../game_data/localization.h"
@@ -148,6 +151,47 @@ namespace SpellHotbar::FlickUi {
         // the cursor back on `save` exactly, which the callers rely on.
         FUCK::Dummy(ImVec2(0.0f, 0.0f));
         FUCK::SameLine(0.0f, 0.0f);
+    }
+
+    void key_label_at(ImVec2 a_pos, unsigned a_col, const std::string& a_text, float a_width, float a_height)
+    {
+        const float font_px = FUCK::CalcTextSize("M").y;
+        const auto label = Rendering::fit_key_label(a_text, a_width, a_height,
+            [](std::string_view text) { return FUCK::CalcTextSize(std::string(text).c_str()); });
+        text_at(a_pos, a_col, label.text.c_str(), font_px * label.scale);
+    }
+
+    void binding_prompt_at(ImVec2 a_pos, unsigned a_col, int a_keybind, key_modifier a_mod,
+        float a_width, float a_height, float a_glyph_height, bool a_icons, float a_triangle_peak_rise)
+    {
+        if ((a_col & 0xFF000000u) == 0) { return; }
+        std::vector<UiBridge::IconRef> icons;
+        std::vector<float> aspects;
+        if (a_icons) {
+            const auto indices = GameData::get_binding_icon_indices(a_keybind, a_mod);
+            if (indices.empty()) { return; } // An unbound slot has no prompt.
+            for (int index : indices) {
+                auto icon = UiBridge::key_icon(index);
+                if (!icon || !FlickImages::image_for(icon->path)) { icons.clear(); break; }
+                icons.push_back(*icon);
+                aspects.push_back(icon->aspect);
+            }
+        }
+        if (icons.empty()) {
+            const std::string text = (a_keybind < 12 || a_keybind >= Input::keybind_id::num_keys) ? GameData::get_keybind_text(a_keybind, a_mod) :
+                GameData::get_binding_text(a_keybind);
+            key_label_at(a_pos, a_col, text, a_width, a_height);
+            return;
+        }
+        for (const auto& item : Rendering::layout_binding_glyphs(aspects, a_width, a_height, a_glyph_height, a_triangle_peak_rise)) {
+            const ImVec2 at(a_pos.x + item.x, a_pos.y + item.y);
+            if (item.index < 0) {
+                text_at(ImVec2(at.x, at.y + item.height * 0.15f), a_col, "+", item.height * 0.65f);
+            }
+            else {
+                add_icon(icons[item.index], at, ImVec2(at.x + item.width, at.y + item.height), a_col);
+            }
+        }
     }
 
     bool radio_button(const char* a_label, int* a_v, int a_value)

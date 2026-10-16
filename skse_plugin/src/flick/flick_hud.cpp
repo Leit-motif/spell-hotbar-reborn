@@ -1,5 +1,6 @@
 #include "flick_watch.h"
 #include "flick_images.h"
+#include "ui/widgets.h"
 #include "../rendering/ui_bridge.h"
 
 
@@ -92,6 +93,11 @@ namespace SpellHotbar::Flick {
                                    ImVec2(img.u0, img.v0), ImVec2(img.u1, img.v1), unpack(img.col));
                 }
 
+                for (const BindingPrompt& p : layer.prompts) {
+                    FlickUi::binding_prompt_at(ImVec2(origin.x + p.x, origin.y + p.y), p.col,
+                        p.keybind, static_cast<key_modifier>(p.modifier), p.width, p.height, p.glyph_height, p.icons, p.triangle_peak_rise);
+                }
+
                 // FLICK's C-ABI has no draw-list text, so text is laid out: park the cursor and
                 // emit. The Dummy below restores the layout extent afterwards.
                 for (const DockText& t : layer.texts) {
@@ -104,6 +110,11 @@ namespace SpellHotbar::Flick {
                     const float px = t.px > 0.0f ? t.px : std::max(layer.text_px, 6.0f);
                     FUCK::PushFont(font, px);
                     ImVec2 at(origin.x + t.x, origin.y + t.y);
+                    if (t.max_width > 0.0f) {
+                        FlickUi::key_label_at(at, t.col, t.text, t.max_width, t.max_height);
+                        FUCK::PopFont();
+                        continue;
+                    }
                     if (t.anchor != 0) {
                         const ImVec2 sz = FUCK::CalcTextSize(t.text.c_str());
                         if (t.anchor == 3) {

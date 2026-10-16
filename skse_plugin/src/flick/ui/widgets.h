@@ -50,6 +50,9 @@ namespace SpellHotbar::FlickUi {
     // laid out: park the cursor, emit, and put the cursor back where it was. Safe between
     // items; do not call between an item and the SameLine() that follows it. ----
     void text_at(ImVec2 a_pos, unsigned a_col, const char* a_text, float a_font_size = 0.0f);
+    void key_label_at(ImVec2 a_pos, unsigned a_col, const std::string& a_text, float a_width, float a_height);
+    void binding_prompt_at(ImVec2 a_pos, unsigned a_col, int a_keybind, key_modifier a_mod,
+        float a_width, float a_height, float a_glyph_height, bool a_icons, float a_triangle_peak_rise = 0.0f);
 
     // ---- Widgets ----
 

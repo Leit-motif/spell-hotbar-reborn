@@ -4,6 +4,7 @@
 #include <optional>
 
 #include "../game_data/action_definition.h"
+#include "../input/gamepad_binding.h"
 
 namespace SpellHotbar::Mcp {
     inline constexpr int k_first_keybind_id = 0;
@@ -29,6 +30,7 @@ namespace SpellHotbar::Mcp {
             }
             pending_id_ = key_id;
             pending_action_id_ = 0;
+            gamepad_capture_.reset();
             return true;
         }
 
@@ -40,6 +42,7 @@ namespace SpellHotbar::Mcp {
             pending_id_ = -1;
             pending_action_id_ = action_id;
             action_result_.reset();
+            gamepad_capture_.reset();
             return true;
         }
 
@@ -47,6 +50,7 @@ namespace SpellHotbar::Mcp {
         {
             pending_id_ = -1;
             pending_action_id_ = 0;
+            gamepad_capture_.reset();
         }
 
         bool armed() const { return pending_id_ >= 0; }
@@ -54,6 +58,14 @@ namespace SpellHotbar::Mcp {
         bool action_armed() const { return pending_action_id_ != 0; }
 
         int pending_id() const { return pending_id_; }
+
+        std::optional<Input::GamepadBinding> apply_gamepad_button(int button, bool down, bool up, std::uint16_t held)
+        {
+            if (!armed()) { return std::nullopt; }
+            auto result = gamepad_capture_.observe(button, down, up, held);
+            if (result) { cancel(); }
+            return result;
+        }
 
         std::uint32_t pending_action_id() const { return pending_action_id_; }
 
@@ -134,6 +146,7 @@ namespace SpellHotbar::Mcp {
         int pending_id_{-1};
         std::uint32_t pending_action_id_{ 0 };
         std::optional<ActionCaptureResult> action_result_;
+        Input::GamepadCapture gamepad_capture_;
     };
 
     BindCaptureState& bind_capture();

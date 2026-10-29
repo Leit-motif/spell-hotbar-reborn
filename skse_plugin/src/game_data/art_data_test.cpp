@@ -8,6 +8,8 @@
 #include <string>
 
 using SpellHotbar::ArtClass;
+using SpellHotbar::ArtKind;
+using SpellHotbar::BlinkLook;
 using SpellHotbar::ArtDefinition;
 using SpellHotbar::ArtIconDrawKind;
 using SpellHotbar::GameData::EquippedType;
@@ -81,6 +83,46 @@ void empty_art_class_defaults_generic()
 	const auto arts = parse_art_tsv(tsv);
 	expect(arts.size() == 1 && arts[0].art_class == ArtClass::Generic,
 		"an empty ArtClass cell is Generic");
+}
+
+void blink_row_loads_kind_and_any_class()
+{
+	const char* tsv =
+		"ArtID\tDisplayName\tIcon\tSelector\tArtClass\tKind\tStaminaCost\tMagickaCost\tCooldown\tGlobalCooldown\n"
+		"951\tBlink\tALTERATION_ADEPT\t0\tAny\tBlink\t0\t30\t3s\t0.5\n"
+		"2\tAimed Blow\tGREATER_POWER\t2\tGeneric\t\t25\t0\t8s\t1.0\n"
+		"952\tVampiric Blink\tALTERATION_ADEPT\t0\tAny\tBatBlink\t0\t30\t3s\t0.5\n";
+	const auto arts = parse_art_tsv(tsv);
+	expect(arts.size() == 3, "Blink, clip and Vampiric Blink rows load");
+	expect(arts.size() >= 1 && arts[0].kind == ArtKind::Blink, "Kind Blink is a Blink");
+	expect(arts.size() >= 1 && arts[0].art_class == ArtClass::Any, "ArtClass Any is Any");
+	expect(arts.size() >= 1 && !arts[0].has_clip, "a Blink has no clip to find");
+	expect(arts.size() >= 1 && arts[0].magicka_cost == 30.0f && arts[0].gcd == 0.5f, "Blink costs load");
+	expect(arts.size() >= 2 && arts[1].kind == ArtKind::Clip && arts[1].has_clip, "an empty Kind is a Clip");
+	expect(arts.size() >= 1 && arts[0].blink_look == BlinkLook::Conjuration, "Kind Blink wears the conjuration rift");
+	expect(arts.size() >= 3 && arts[2].kind == ArtKind::Blink && !arts[2].has_clip, "Kind BatBlink (Vampiric Blink) is a Blink");
+	expect(arts.size() >= 3 && arts[2].blink_look == BlinkLook::Bats, "Kind BatBlink wears the bat swarm");
+}
+
+void catalogue_without_kind_column_is_all_clips()
+{
+	const auto arts = parse_art_tsv(
+		"ArtID\tDisplayName\tIcon\tSelector\tArtClass\tStaminaCost\tCooldown\tGlobalCooldown\n"
+		"2\tAimed Blow\tGREATER_POWER\t2\tGeneric\t25\t8s\t1.0\n");
+	expect(arts.size() == 1 && arts[0].kind == ArtKind::Clip, "no Kind column means Clip");
+}
+
+void any_class_is_live_on_every_loadout_and_bar()
+{
+	for (const auto equipped : { EquippedType::FIST, EquippedType::SPELL, EquippedType::BOW,
+			 EquippedType::CROSSBOW, EquippedType::STAFF_SHIELD, EquippedType::TWOHAND }) {
+		expect(art_class_is_live(ArtClass::Any, equipped), "Any is live with this loadout");
+		expect(art_equipped_tint(ArtClass::Any, equipped) == ArtBarTint::generic, "Any tints generic");
+	}
+	for (const auto bar : { static_cast<std::uint32_t>('MAGC'), static_cast<std::uint32_t>('RNGD'),
+			 static_cast<std::uint32_t>('2HND'), static_cast<std::uint32_t>('MAIN') }) {
+		expect(art_bar_tint(ArtClass::Any, bar) == ArtBarTint::generic, "Any is live, never direct, on this bar");
+	}
 }
 
 void eight_seconds_is_spell_data_days()
@@ -838,6 +880,9 @@ int main()
 	default_icon_name_when_not_in_extra_atlas();
 	unknown_icon_degrades_to_unknown_kind();
 	player_overlay_replaces_catalogue_tuning_and_round_trips();
+	blink_row_loads_kind_and_any_class();
+	catalogue_without_kind_column_is_all_clips();
+	any_class_is_live_on_every_loadout_and_bar();
 
 	if (g_failures != 0) {
 		std::cerr << g_failures << " failure(s)\n";

@@ -1,6 +1,7 @@
 #include "lifecycle.h"
 
 #include "first_run_policy.h"
+#include "../casts/blink.h"
 #include "../casts/hyper_armor_sync.h"
 #include "../game_data/game_data.h"
 #include "../input/input.h"
@@ -140,6 +141,7 @@ namespace SpellHotbar::Lifecycle {
 
     void on_new_game()
     {
+        casts::Blink::reset();
         // A New Game started after a save in the same process inherits that session's globals.
         GameData::reset_animation_vars();
         remove_legacy_battlemage_power();
@@ -151,6 +153,7 @@ namespace SpellHotbar::Lifecycle {
 
     void on_post_load_game()
     {
+        casts::Blink::reset();
         // SpellHotbar_SpellAnimationType (0x815) is a non-constant TESGlobal, so the
         // save stores whatever the last session left in it. drop_live_cast() on
         // PreLoadGame used to skip the zero because "the load resets them itself" —

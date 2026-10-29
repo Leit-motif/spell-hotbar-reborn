@@ -487,7 +487,7 @@ namespace SpellHotbar::casts::MscoCastDriver {
 				const bool taught = reopen_keeps_restore_taught(
 					g_rolling.restore_pending(), already_same,
 					already_same && already->taught_by_restore);
-				g_swing.open(kind, static_cast<int>(playing), taught);
+				g_swing.open(kind, static_cast<int>(playing), taught, now_ms());
 			} else {
 				g_swing.close();
 			}
@@ -730,7 +730,7 @@ namespace SpellHotbar::casts::MscoCastDriver {
 			return;
 		}
 		const bool taught_by_restore = g_rolling.restore_pending();
-		g_swing.open(*kind, static_cast<int>(playing), taught_by_restore);
+		g_swing.open(*kind, static_cast<int>(playing), taught_by_restore, now_ms());
 		// BFCO never raises MCO_AttackInitiate, so the seam is the consume.
 		// Disarm after the open so this swing stays restore-taught; a rewrite here
 		// would fight the clip's upcoming advance. An out-of-range open is not a swing.
@@ -745,6 +745,21 @@ namespace SpellHotbar::casts::MscoCastDriver {
 	bool swing_open()
 	{
 		return g_swing.open_swing().has_value();
+	}
+
+	void close_swing_if_attack_ended(RE::PlayerCharacter* pc)
+	{
+		const auto open = g_swing.open_swing();
+		const int attacking = open ? read_is_attacking(pc) : -1;
+		if (attacking < 0) {
+			return;
+		}
+		const double age = now_ms() - open->opened_ms;
+		if (swing_outlived_its_attack(attacking == 1, age)) {
+			g_swing.close();
+			logger::debug("SH2 cast: closed a swing the graph stopped playing without attackStop ({:.0f} ms open)",
+				age);
+		}
 	}
 
 	bool swing_window_open()

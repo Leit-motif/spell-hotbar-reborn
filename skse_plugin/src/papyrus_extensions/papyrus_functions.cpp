@@ -6,6 +6,7 @@
 #include "../game_data/game_data.h"
 #include "../rendering/render_manager.h"
 #include "../casts/casting_controller.h"
+#include "../casts/blink.h"
 #include "../input/keybinds.h"
 #include "../storage/user_data_io.h"
 #include "../input/modes.h"
@@ -104,6 +105,27 @@ void set_slot_key_held(RE::StaticFunctionTag*, int slot_index, bool held)
         }
         Input::key_spells[static_cast<size_t>(slot_index)].set_synthetic_down(held);
         logger::info("setSlotKeyHeld({}, {}): applied", slot_index, held);
+    });
+}
+
+void set_blink_test_input(RE::StaticFunctionTag*, float x, float y)
+{
+    SKSE::GetTaskInterface()->AddTask([x, y]() {
+        SpellHotbar::casts::Blink::set_test_input(x, y);
+        logger::info("setBlinkTestInput({}, {}): applied to the next Blink", x, y);
+    });
+}
+
+bool is_blink_ghost(RE::StaticFunctionTag*)
+{
+    return SpellHotbar::casts::Blink::is_ghost();
+}
+
+void place_blink_test_model(RE::StaticFunctionTag*, RE::BSFixedString model, float forward)
+{
+    std::string path{ model.c_str() };
+    SKSE::GetTaskInterface()->AddTask([path, forward]() {
+        SpellHotbar::casts::Blink::place_test_model(path, forward);
     });
 }
 
@@ -796,6 +818,9 @@ bool SpellHotbar::register_papyrus_functions(RE::BSScript::IVirtualMachine* vm) 
     vm->RegisterFunction("slotAction", "SpellHotbar", slot_action);
     vm->RegisterFunction("setSlotHand", "SpellHotbar", set_slot_hand);
     vm->RegisterFunction("setSlotKeyHeld", "SpellHotbar", set_slot_key_held);
+    vm->RegisterFunction("setBlinkTestInput", "SpellHotbar", set_blink_test_input);
+    vm->RegisterFunction("isBlinkGhost", "SpellHotbar", is_blink_ghost);
+    vm->RegisterFunction("placeBlinkTestModel", "SpellHotbar", place_blink_test_model);
     vm->RegisterFunction("getArtSelector", "SpellHotbar", get_art_selector);
     vm->RegisterFunction("getNumberOfSlots", "SpellHotbar", get_number_of_slots);
     vm->RegisterFunction("setNumberOfSlots", "SpellHotbar", set_number_of_slots);

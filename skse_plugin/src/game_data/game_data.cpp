@@ -8,6 +8,7 @@
 #include "../casts/casting_controller.h"
 #include "../casts/hyper_armor.h"
 #include "../casts/hyper_armor_sync.h"
+#include "../casts/unpaused_clock.h"
 #include "spell_data_csv_loader.h"
 #include "spell_casteffect_csv_loader.h"
 #include "custom_transform_csv_loader.h"
@@ -117,7 +118,7 @@ namespace SpellHotbar::GameData {
     std::unordered_map<RE::FormID, Gametime_cooldown_value> gametime_cooldowns;
     std::unordered_map<uint32_t, ArtDefinition> art_cast_info;
     std::unordered_map<uint32_t, ArtDefinition> art_catalogue;
-    std::unordered_map<uint32_t, Gametime_cooldown_value> art_cooldowns;
+    std::unordered_map<uint32_t, Gameplay_cooldown_value> art_cooldowns;
     std::unordered_map<uint32_t, ActionDefinition> action_cast_info;
     std::unordered_map<uint32_t, ActionDefinition> action_catalogue;
     std::unordered_map<uint32_t, Gametime_cooldown_value> action_cooldowns;
@@ -930,6 +931,12 @@ namespace SpellHotbar::GameData {
         auto * pc = RE::PlayerCharacter::GetSingleton();
         if (!pc) return false;
         return (vampire_lord_race != nullptr) && (pc->GetRace() == vampire_lord_race);
+    }
+    bool isVampire()
+    {
+        auto* pc = RE::PlayerCharacter::GetSingleton();
+        auto* race = pc ? pc->GetRace() : nullptr;
+        return isVampireLord() || (race && race->HasKeywordString("Vampire"));
     }
     bool isWerewolf() {
         auto* pc = RE::PlayerCharacter::GetSingleton();
@@ -1920,44 +1927,52 @@ namespace SpellHotbar::GameData {
         return art_selector.load(std::memory_order_relaxed);
     }
 
+    // An Ability's cooldown is authored in days of the parsed duration ("3s" is 3/86400), and means
+    // that many seconds of play.
     void add_art_cooldown(uint32_t art_id, float days)
     {
-        auto cal = RE::Calendar::GetSingleton();
-        if (!cal || days <= 0.0f) {
+        if (days <= 0.0f) {
             return;
         }
-        float curr_time = cal->GetCurrentGameTime();
-        float gt_value = days * cal->GetTimescale() * 24.0f;
-        float hours = gt_value;
-        float duration_days = hours / 24.0f;
-        art_cooldowns.insert_or_assign(art_id, Gametime_cooldown_value(curr_time + duration_days, duration_days));
+        const double duration_ms = static_cast<double>(days) * 24.0 * 60.0 * 60.0 * 1000.0;
+        art_cooldowns.insert_or_assign(art_id,
+            Gameplay_cooldown_value{ casts::UnpausedClock::now_ms() + duration_ms, duration_ms });
     }
 
     bool is_art_on_cd(uint32_t art_id)
     {
-        auto cal = RE::Calendar::GetSingleton();
-        if (!cal) {
-            return false;
-        }
-        float game_time = cal->GetCurrentGameTime();
         auto it = art_cooldowns.find(art_id);
         if (it == art_cooldowns.end()) {
             return false;
         }
-        return !it->second.is_expired(game_time);
+        return !it->second.is_expired(casts::UnpausedClock::now_ms());
     }
 
-    std::tuple<float, float> get_art_gametime_cooldown(float curr_game_time, uint32_t art_id)
+    std::tuple<float, float> get_art_cooldown(uint32_t art_id)
     {
         auto it = art_cooldowns.find(art_id);
         if (it == art_cooldowns.end()) {
             return std::make_tuple(0.0f, 0.0f);
         }
-        if (it->second.readytime <= curr_game_time) {
+        const double now = casts::UnpausedClock::now_ms();
+        if (it->second.is_expired(now)) {
             art_cooldowns.erase(it);
             return std::make_tuple(0.0f, 0.0f);
         }
-        return std::make_tuple(it->second.get_progress(curr_game_time), it->second.duration);
+        return std::make_tuple(it->second.get_progress(now), static_cast<float>(it->second.duration_ms));
+    }
+
+    float Gameplay_cooldown_value::get_progress(double now_ms) const
+    {
+        if (ready_ms > now_ms && duration_ms > 0.0) {
+            return static_cast<float>(1.0 - (ready_ms - now_ms) / duration_ms);
+        }
+        return 0.0f;
+    }
+
+    bool Gameplay_cooldown_value::is_expired(double now_ms) const
+    {
+        return now_ms >= ready_ms;
     }
 
     void add_action_cooldown(uint32_t action_id, float days)

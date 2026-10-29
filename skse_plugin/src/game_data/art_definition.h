@@ -15,7 +15,24 @@ enum class ArtClass {
 	TwoHand,
 	Dual,
 	Generic,
-	Bow
+	Bow,
+	// Live with every loadout, spells and empty hands included: an Ability that plays no weapon
+	// clip, such as a Blink, has no weapon to gate on.
+	Any
+};
+
+// What a press of the Ability does. A Clip Ability plays an animation through `shtb`; a Blink
+// plays nothing and teleports the player, so it never enters the cast state (casts/blink.h).
+enum class ArtKind {
+	Clip,
+	Blink
+};
+
+// What a Blink looks and sounds like; the jump itself is the same. `Kind` BatBlink in the
+// catalogue is a Blink in the Vampire Lord's bat swarm instead of the conjuration rift.
+enum class BlinkLook {
+	Conjuration,
+	Bats
 };
 
 struct ArtDefinition {
@@ -25,6 +42,8 @@ struct ArtDefinition {
 	std::uint32_t icon_form{0};
 	int selector{0};
 	ArtClass art_class{ArtClass::Generic};
+	ArtKind kind{ArtKind::Clip};
+	BlinkLook blink_look{BlinkLook::Conjuration};
 	float stamina_cost{0.0f};
 	float magicka_cost{0.0f};
 	float health_cost{0.0f};
@@ -59,13 +78,17 @@ std::optional<int> parse_custom_art_folder_number(std::string_view folder_name);
 
 // Parse a tab-separated art catalogue. Header row required. Rows whose ArtID is 0 or whose
 // DisplayName is empty are skipped. Cooldown uses the same 30s / 1.5h / 12m grammar as spell
-// data; a non-positive value means no cooldown (-1). ArtClass values are 1H, 2H, Dual, Bow, Generic;
-// an empty cell is Generic.
+// data; a non-positive value means no cooldown (-1). ArtClass values are 1H, 2H, Dual, Bow, Generic
+// and Any; an empty cell is Generic. The optional Kind column is Clip (the default) or Blink.
 std::vector<ArtDefinition> parse_art_tsv(std::string_view text);
 
 std::optional<float> parse_art_duration_days(std::string_view time_str);
 
 ArtClass parse_art_class(std::string_view text);
+
+// The catalogue's optional `Kind` column. Empty or unknown is Clip, so every existing row keeps
+// its meaning.
+ArtKind parse_art_kind(std::string_view text);
 
 struct ArtPlayerOverlay {
 	std::string display_name;
@@ -99,8 +122,16 @@ void apply_art_player_overlay(ArtDefinition& art, const ArtPlayerOverlay& overla
 		return "Bow";
 	case ArtClass::Generic:
 		return "Generic";
+	case ArtClass::Any:
+		return "Any";
 	}
 	return "Generic";
+}
+
+// Vampiric Blink is a vampire's: greyed on the bar and refused on a press for anyone else.
+[[nodiscard]] constexpr bool blink_look_is_live(BlinkLook look, bool player_is_vampire) noexcept
+{
+	return look != BlinkLook::Bats || player_is_vampire;
 }
 
 [[nodiscard]] constexpr bool art_class_is_live(ArtClass art_class, GameData::EquippedType equipped) noexcept
@@ -120,6 +151,8 @@ void apply_art_player_overlay(ArtDefinition& art, const ArtPlayerOverlay& overla
 		return equipped == EquippedType::FIST || art_class_is_live(ArtClass::OneHand, equipped) ||
 			   art_class_is_live(ArtClass::TwoHand, equipped) ||
 			   art_class_is_live(ArtClass::Dual, equipped);
+	case ArtClass::Any:
+		return true;
 	}
 	return false;
 }
@@ -168,6 +201,9 @@ void apply_art_player_overlay(ArtDefinition& art, const ArtPlayerOverlay& overla
 	const bool shield_bar = art_class_is_live(art_class, EquippedType::ONEHAND_SHIELD);
 	const bool spell_bar = art_class_is_live(art_class, EquippedType::ONEHAND_SPELL);
 	const bool two_hand_bar = art_class_is_live(art_class, EquippedType::TWOHAND);
+	if (art_class == ArtClass::Any) {
+		return true;
+	}
 	const bool melee_parent = one_hand_empty || dual_wield_bar || shield_bar || spell_bar || two_hand_bar;
 	switch (bar) {
 	case static_cast<std::uint32_t>('1HDW'):
@@ -194,7 +230,7 @@ void apply_art_player_overlay(ArtDefinition& art, const ArtPlayerOverlay& overla
 // is therefore never direct; parent bars union their children, so nothing is direct on them.
 [[nodiscard]] constexpr bool art_class_is_direct_on_bar(ArtClass art_class, std::uint32_t bar_id) noexcept
 {
-	if (art_class == ArtClass::Generic) {
+	if (art_class == ArtClass::Generic || art_class == ArtClass::Any) {
 		return false;
 	}
 	switch (art_bar_stance_root(bar_id)) {
@@ -246,7 +282,7 @@ enum class ArtBarTint {
 	if (!art_class_is_live(art_class, equipped)) {
 		return ArtBarTint::dead;
 	}
-	if (art_class == ArtClass::Generic) {
+	if (art_class == ArtClass::Generic || art_class == ArtClass::Any) {
 		return ArtBarTint::generic;
 	}
 	return ArtBarTint::direct;

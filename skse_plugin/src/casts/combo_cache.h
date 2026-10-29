@@ -459,13 +459,16 @@ public:
 		// own graph let a cast in at. A fresh swing opens with it false: the window belongs to
 		// the clip, and the clip has not reached it yet.
 		bool window_open = false;
+		// Unpaused-clock time of the open, so a swing the graph stopped playing without an
+		// `attackStop` can be told from one that has not started playing yet.
+		double opened_ms = 0.0;
 	};
 
 	// An index outside the plausible moveset range is not a combo position -- the read failed, or
 	// the graph holds something that is not a swing index. Rather than remember a value we cannot
 	// reason about, forget the swing entirely: a closed tracker degrades to today's behaviour,
 	// while a wrong playing index would mislabel a post-advance sample as a replay.
-	void open(McoSgviVariable kind, int playing, bool taught_by_restore)
+	void open(McoSgviVariable kind, int playing, bool taught_by_restore, double opened_ms = 0.0)
 	{
 		std::lock_guard lock{ mutex_ };
 		if (playing < kMinIndex || playing > kMaxIndex) {
@@ -473,7 +476,7 @@ public:
 			return;
 		}
 		open_ = true;
-		swing_ = OpenSwing{ kind, playing, taught_by_restore };
+		swing_ = OpenSwing{ kind, playing, taught_by_restore, false, opened_ms };
 	}
 
 	void close()
@@ -1038,6 +1041,18 @@ inline constexpr float kLatchClipTimeSlack = 1.0f / 30.0f;
 		return false;
 	}
 	return someone_elses_swing_open && !swing_window_open;
+}
+
+// A swing closes at `attackStop`, and a swing that is interrupted may never raise one: a stagger
+// cutting an attack short left the tracker open, and every hotbar cast
+// after it was held for a cancel window that was never coming, then dropped. The graph's own
+// `IsAttacking` is the other end of a swing. The grace covers the seam opening the tracker at the
+// attack's send, a frame or two before the graph has entered `AttackState`.
+inline constexpr double kSwingStartGraceMs = 300.0;
+
+[[nodiscard]] constexpr bool swing_outlived_its_attack(bool graph_attacking, double open_age_ms) noexcept
+{
+	return !graph_attacking && open_age_ms >= kSwingStartGraceMs;
 }
 
 // Our Driver Cast or Ability owns release until its latch opens. Concentration is excluded.

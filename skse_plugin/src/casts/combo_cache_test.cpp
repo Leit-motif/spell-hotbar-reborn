@@ -37,6 +37,8 @@ using SpellHotbar::casts::is_mco_combo_index_edge;
 using SpellHotbar::casts::McoSgviVariable;
 using SpellHotbar::casts::McoSuccessorTable;
 using SpellHotbar::casts::McoSwingTracker;
+using SpellHotbar::casts::kSwingStartGraceMs;
+using SpellHotbar::casts::swing_outlived_its_attack;
 using SpellHotbar::casts::live_sample_is_pre_advance;
 using SpellHotbar::casts::parse_mco_sgvi_sample;
 using SpellHotbar::casts::parse_sgvi_int;
@@ -1497,8 +1499,26 @@ void an_unlearned_pre_advance_keeps_todays_behaviour()
 }
 }  // namespace
 
+void a_swing_the_graph_stopped_playing_closes_without_attackStop()
+{
+	expect(!swing_outlived_its_attack(false, 0.0),
+		"a swing opened at its send is not over before the graph has started playing it");
+	expect(!swing_outlived_its_attack(false, kSwingStartGraceMs - 1.0),
+		"a swing just short of the start grace is still waiting for the graph");
+	expect(swing_outlived_its_attack(false, kSwingStartGraceMs),
+		"a swing the graph is no longer playing is over, attackStop or not (the stagger case)");
+	expect(!swing_outlived_its_attack(true, 10000.0),
+		"a long swing the graph is still playing stays open");
+
+	McoSwingTracker tracker;
+	tracker.open(McoSgviVariable::next_attack, 1, false, 1234.0);
+	const auto open = tracker.open_swing();
+	expect(open && open->opened_ms == 1234.0, "the tracker remembers when the swing opened");
+}
+
 int main()
 {
+	a_swing_the_graph_stopped_playing_closes_without_attackStop();
 	rolling_empty_is_not_usable();
 	rolling_returns_the_recorded_value_not_plus_one();
 	rolling_is_usable_at_the_age_cap();

@@ -126,6 +126,13 @@ namespace SpellHotbar::casts::MscoCastDriver {
 	bool swing_open();
 
 	/**
+	 * Close the tracker when the graph is no longer attacking but no `attackStop` arrived -- a
+	 * stagger or other interrupt that cuts a swing short. Without it every hotbar press would be
+	 * held for a cancel window that never comes. No-op when no swing is tracked.
+	 */
+	void close_swing_if_attack_ended(RE::PlayerCharacter* pc);
+
+	/**
 	 * Is the open swing inside its cancel window? True between the swing's `MCO_WinOpen` /
 	 * `MCO_PowerWinOpen` and its first window-close annotation -- the span MCO's own graph let
 	 * a cast in at, and the edge the local cast-intent latch releases a held press on. False

@@ -13,6 +13,7 @@
 #include "../casts/combo_cache.h"
 #include "../casts/msco_cast_driver.h"
 #include "../casts/art_driver.h"
+#include "../casts/blink.h"
 #include "../storage/storage.h"
 #include "modes.h"
 #include "../game_data/action_definition.h"
@@ -157,6 +158,13 @@ namespace SpellHotbar::Input {
 
         bool action_event_handled = false;
         bool owned_gamepad_release = false;
+
+        // The Blink reads the stick as of its press; the root stops the character, not the stick.
+        if (event->eventType == RE::INPUT_EVENT_TYPE::kThumbstick) {
+            if (auto* stick = event->AsThumbstickEvent(); stick && stick->IsLeft()) {
+                casts::Blink::note_left_stick(stick->xValue, stick->yValue);
+            }
+        }
 
         // Action targets are an event bridge, so their release must not depend on the current
         // mode, modifier, menu, capture state, or a still-loaded player.  Match the original DX

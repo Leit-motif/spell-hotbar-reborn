@@ -146,7 +146,18 @@ ArtClass parse_art_class(std::string_view text)
 	if (text == "Bow") {
 		return ArtClass::Bow;
 	}
+	if (text == "Any") {
+		return ArtClass::Any;
+	}
 	return ArtClass::Generic;
+}
+
+ArtKind parse_art_kind(std::string_view text)
+{
+	if (text == "Blink" || text == "BatBlink") {
+		return ArtKind::Blink;
+	}
+	return ArtKind::Clip;
 }
 
 std::vector<ArtDefinition> parse_art_tsv(std::string_view text)
@@ -196,6 +207,12 @@ std::vector<ArtDefinition> parse_art_tsv(std::string_view text)
 		art.icon = cell(cols, index, "Icon");
 		art.selector = to_int(cell(cols, index, "Selector")).value_or(0);
 		art.art_class = parse_art_class(cell(cols, index, "ArtClass"));
+		art.kind = parse_art_kind(cell(cols, index, "Kind"));
+		if (cell(cols, index, "Kind") == "BatBlink") {
+			art.blink_look = BlinkLook::Bats;
+		}
+		// A Blink plays no clip, so nothing about one can be on disk to find or miss.
+		art.has_clip = art.kind == ArtKind::Clip;
 		art.stamina_cost = to_float(cell(cols, index, "StaminaCost")).value_or(0.0f);
 		art.magicka_cost = to_float(cell(cols, index, "MagickaCost")).value_or(0.0f);
 		art.health_cost = to_float(cell(cols, index, "HealthCost")).value_or(0.0f);

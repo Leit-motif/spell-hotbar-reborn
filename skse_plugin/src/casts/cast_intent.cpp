@@ -390,6 +390,7 @@ namespace SpellHotbar::casts::CastIntent {
 		}
 
 		const auto skill = GameData::get_current_spell_info_in_slot(slot);
+		MscoCastDriver::close_swing_if_attack_ended(RE::PlayerCharacter::GetSingleton());
 		if (should_retain_now()) {
 			retain_local_payload(slot, keybind, true);
 			logger::debug("SH2 cast intent: slot {} retained on local latch (type={})", slot,
@@ -472,6 +473,7 @@ namespace SpellHotbar::casts::CastIntent {
 		// retain bail cannot see past. The press was consumed on our word that it would fire
 		// later; when that word expires, say so loudly on both channels rather than quietly
 		// keeping it.
+		MscoCastDriver::close_swing_if_attack_ended(RE::PlayerCharacter::GetSingleton());
 		const double cap = hold_cap_ms();
 		if (payload.type == slot_type::weapon_art &&
 			ArtDriver::should_hold_ability_for_leftover_clip(ArtDriver::clip_is_active(),

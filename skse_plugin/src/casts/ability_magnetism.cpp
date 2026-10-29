@@ -68,4 +68,15 @@ void update(RE::PlayerCharacter *pc, float dt, bool ability_live) {
   }
 }
 
+bool face_locked_target(RE::PlayerCharacter *pc) {
+  const auto target = pc ? locked_target() : RE::NiPointer<RE::Actor>{};
+  if (!target) {
+    return false;
+  }
+  const auto from = pc->GetPosition();
+  const auto to = target->GetPosition();
+  pc->SetHeading(heading_toward(to.x - from.x, to.y - from.y));
+  return true;
+}
+
 } // namespace SpellHotbar::casts::AbilityMagnetism

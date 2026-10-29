@@ -16,4 +16,9 @@ void negotiate();
 // loaded actor.
 void update(RE::PlayerCharacter *pc, float dt, bool ability_live);
 
+// Turn the player straight to face TDM's locked target, if TDM holds one. Returns whether it did.
+// For a Blink's landing: TDM keeps the lock through the jump but does not re-face the player, so a
+// sideways Blink left them up to 38 degrees off the target (measured, issue #34).
+bool face_locked_target(RE::PlayerCharacter *pc);
+
 } // namespace SpellHotbar::casts::AbilityMagnetism

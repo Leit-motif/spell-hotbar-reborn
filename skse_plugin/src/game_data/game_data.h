@@ -100,6 +100,17 @@ namespace SpellHotbar::GameData {
         TAB_FOOD
     };
 
+    // An Ability cooldown on the gameplay clock (casts/unpaused_clock.h), in milliseconds: it
+    // stops while the game is paused, and waiting, sleeping or moving the calendar can neither
+    // end it early nor strand it in the future.
+    struct Gameplay_cooldown_value {
+        double ready_ms; // gameplay time when ready again
+        double duration_ms;
+
+        [[nodiscard]] float get_progress(double now_ms) const;
+        [[nodiscard]] bool is_expired(double now_ms) const;
+    };
+
     struct Gametime_cooldown_value {
         float readytime; //Gametime when ready again
         float duration; //total cooldown duration
@@ -303,7 +314,8 @@ namespace SpellHotbar::GameData {
     int get_art_selector();
     void add_art_cooldown(uint32_t art_id, float days);
     bool is_art_on_cd(uint32_t art_id);
-    std::tuple<float, float> get_art_gametime_cooldown(float curr_game_time, uint32_t art_id);
+    // (progress 0..1, duration in ms), or (0, 0) when the Ability is ready.
+    std::tuple<float, float> get_art_cooldown(uint32_t art_id);
 
     void add_action_cooldown(uint32_t action_id, float days);
     void clear_action_cooldown(uint32_t action_id);
@@ -327,6 +339,8 @@ namespace SpellHotbar::GameData {
 
     EquippedType getPlayerEquipmentType();
     bool isVampireLord();
+    // A vampire by race keyword, in either form; the Vampire Lord's race carries it too.
+    bool isVampire();
     bool isWerewolf();
     uint32_t isCustomTransform();
     custom_transform_spell_type getCustomTransformCasttype();

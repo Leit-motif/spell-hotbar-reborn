@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(SpellHotbar2 VERSION 0.9.9 LANGUAGES CXX)
+project(SpellHotbar2 VERSION 0.9.9.1 LANGUAGES CXX)
 
 include(CTest)
 
@@ -211,6 +211,9 @@ set(source_files src/plugin.cpp
                  src/game_data/custom_ability_runtime.cpp
                  src/casts/spell_proc.h
                  src/casts/spell_proc.cpp
+                 src/casts/blink.h
+                 src/casts/blink.cpp
+                 src/casts/blink_rules.h
                  src/rendering/bind_drop.h
                  src/rendering/ui_bridge.h
                  src/game_data/localization.h
@@ -230,6 +233,10 @@ add_executable(trampoline_alloc_test src/events/trampoline_alloc_test.cpp)
 target_compile_features(trampoline_alloc_test PRIVATE cxx_std_23)
 target_compile_definitions(trampoline_alloc_test PRIVATE
     SH2_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/src")
+
+add_executable(blink_rules_test src/casts/blink_rules_test.cpp)
+target_compile_features(blink_rules_test PRIVATE cxx_std_23)
+target_include_directories(blink_rules_test PRIVATE src/casts)
 
 add_executable(clip_translation_test src/casts/clip_translation_test.cpp)
 target_compile_features(clip_translation_test PRIVATE cxx_std_23)
@@ -326,6 +333,7 @@ target_include_directories(action_overlay_persistence_test PRIVATE src/storage)
 
 add_test(NAME combo_cache_test COMMAND combo_cache_test)
 add_test(NAME clip_translation_test COMMAND clip_translation_test)
+add_test(NAME blink_rules_test COMMAND blink_rules_test)
 add_test(NAME attack_seam_test COMMAND attack_seam_test)
 add_test(NAME trampoline_alloc_test COMMAND trampoline_alloc_test)
 add_test(NAME art_pack_gen_test COMMAND art_pack_gen_test)

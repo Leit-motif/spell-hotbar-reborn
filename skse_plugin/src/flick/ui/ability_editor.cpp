@@ -31,8 +31,8 @@ namespace SpellHotbar::FlickUi::AbilityEditor {
         bool draft_self_target{ false };
         bool persist_failed{ false };
 
-        constexpr std::array<ArtClass, 5> class_values{
-            ArtClass::OneHand, ArtClass::TwoHand, ArtClass::Dual, ArtClass::Bow, ArtClass::Generic };
+        constexpr std::array<ArtClass, 6> class_values{
+            ArtClass::OneHand, ArtClass::TwoHand, ArtClass::Dual, ArtClass::Bow, ArtClass::Generic, ArtClass::Any };
 
         void load_from_art(const ArtDefinition& art)
         {

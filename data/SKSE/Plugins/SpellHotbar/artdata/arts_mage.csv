@@ -1,0 +1,3 @@
+ArtID	DisplayName	Icon	Selector	ArtClass	Kind	StaminaCost	MagickaCost	Cooldown	GlobalCooldown
+951	Blink	icons_weapon_arts.png_mage_951_blink	0	Any	Blink	0	30	3s	0.5
+952	Vampiric Blink	icons_weapon_arts.png_mage_952_bat_blink	0	Any	BatBlink	0	30	3s	0.5

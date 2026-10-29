@@ -800,11 +800,12 @@ namespace SpellHotbar
             }
             else if (skill.type == slot_type::weapon_art) {
                 const ArtDefinition* art_def = GameData::get_art(skill.art_id);
-                if (art_def && !art_class_is_live(art_def->art_class, ctx.equipped_type)) {
+                if (art_def && (!art_class_is_live(art_def->art_class, ctx.equipped_type) ||
+                                !blink_look_is_live(art_def->blink_look, GameData::isVampire()))) {
                     cooldown(0.0f);
                 } else {
                     float cd_prog{ 0.0f };
-                    auto [gt_prog, gt_dur] = GameData::get_art_gametime_cooldown(ctx.game_time, skill.art_id);
+                    auto [gt_prog, gt_dur] = GameData::get_art_cooldown(skill.art_id);
                     if (gt_dur > 0.0f) {
                         cd_prog = gt_prog;
                     } else if (ctx.gcd_prog > 0.0f) {

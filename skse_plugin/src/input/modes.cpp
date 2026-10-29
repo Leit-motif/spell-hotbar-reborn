@@ -3,6 +3,9 @@
 #include "../rendering/render_manager.h"
 #include "../casts/casting_controller.h"
 #include "../casts/cast_intent.h"
+#include "../casts/blink.h"
+#include "../casts/blink_rules.h"
+#include "../game_data/game_data.h"
 
 namespace SpellHotbar::Input {
 
@@ -79,6 +82,16 @@ namespace SpellHotbar::Input {
 			return;
 		}
 
+        // A Blink holds no cast instance, so it is the one press that goes around the gate below:
+        // a concentration channel stays live under it, which is the point of the Ability.
+        const bool is_ability = skill.type == slot_type::weapon_art;
+        const ArtDefinition* art = is_ability ? GameData::get_art(skill.art_id) : nullptr;
+        if (casts::blink_bypasses_cast_gate(is_ability, art != nullptr && art->kind == ArtKind::Blink)) {
+            const bool success = allowed_to_instantcast(0) && casts::Blink::try_blink(skill.art_id, i);
+            SpellHotbar::RenderManager::highlight_skill_slot(static_cast<int>(i), 0.5, !success);
+            return;
+        }
+
         // One gate for every slot type, as stock SH2 shipped it. A press that arrives while a
         // cast instance is live dies here and paints the red flash in the else-branch -- press,
         // lockout, visible refusal, identical across spells, shouts, arts, powers and potions.
@@ -91,7 +104,8 @@ namespace SpellHotbar::Input {
         // attack but not yet retired -- and such a press is refused rather than deferred. That
         // lockout is intended, not an oversight: `current_cast` is the whole gate, and no slot
         // type buys an exemption from it.
-        if (allowed_to_instantcast(skill.formID) && casts::CastingController::can_start_new_cast()) {
+        if (allowed_to_instantcast(skill.formID) && casts::CastingController::can_start_new_cast() &&
+            !casts::Blink::gcd_active()) {
             if (skill.type == slot_type::weapon_art) {
                 bool success = casts::CastingController::try_start_art(skill.art_id, i, bind);
                 report_press(i, success);

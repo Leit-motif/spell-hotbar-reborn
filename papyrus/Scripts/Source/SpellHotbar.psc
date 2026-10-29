@@ -18,6 +18,14 @@ function setSlotHand(int slot_index, int hand) global native
 ; Test seam: force a slot keybind's held state so a concentration channel can be
 ; sustained headlessly. Set true BEFORE castSlot; set false to release the channel.
 function setSlotKeyHeld(int slot_index, bool held) global native
+; Test seam: the movement input (x strafe right, y forward) the next Blink reads instead of the
+; devices, once. DevBench's injected input never reaches the device state a Blink reads.
+function setBlinkTestInput(float x, float y) global native
+; Test seam: whether a Blink's iframes have the player a ghost right now.
+bool function isBlinkGhost() global native
+; Test seam: a mesh (Data\meshes-relative path) placed `forward` units ahead of the camera for four
+; seconds, to judge a Blink effect without a Blink.
+function placeBlinkTestModel(string model, float forward) global native
 int function getArtSelector() global native
 int function getNumberOfSlots() global native
 int function setNumberOfSlots(int num) global native

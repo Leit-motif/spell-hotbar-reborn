@@ -18,6 +18,7 @@
 #include "cast_intent.h"
 #include "seam_dispatch.h"
 #include "unpaused_clock.h"
+#include "blink.h"
 #include "../game_data/custom_ability_config.h"
 
 namespace SpellHotbar::casts::CastingController {
@@ -1272,6 +1273,7 @@ namespace SpellHotbar::casts::CastingController {
 		// This is the only advance: the caller runs this whole function only while the game is
 		// unpaused, which is what makes the counter gameplay time rather than wall time.
 		UnpausedClock::advance(delta);
+		Blink::update();
 		// One bool graph read per unpaused frame on the player: the shout's own liveness, which
 		// is what a deferred selectedPower write-back is waiting on.
 		if (auto* player = RE::PlayerCharacter::GetSingleton()) {
@@ -1848,19 +1850,20 @@ namespace SpellHotbar::casts::CastingController {
 		}
 	}
 
+	// A Blink's GCD lives in the Blink, not in an instance, so the bar's sweep falls back to it.
 	float get_current_gcd_progress()
 	{
 		if (current_cast) {
 			return current_cast->get_current_gcd_progress();
 		}
-		return 0.0f;
+		return Blink::gcd_progress();
 	}
 	float get_current_gcd_duration()
 	{
 		if (current_cast) {
 			return current_cast->get_current_gcd_duration();
 		}
-		return 0.0f;
+		return Blink::gcd_duration();
 	}
 
 	void cast_spell_on_player(RE::SpellItem* spell, float magnitude, bool no_art) {
